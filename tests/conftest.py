@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from backend.app.database import Base, get_engine, get_session
+import backend.app.models  # noqa: F401 — registers all ORM models on Base.metadata
 
 
 @pytest.fixture
