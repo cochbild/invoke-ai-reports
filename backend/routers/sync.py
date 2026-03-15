@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.database import get_db, get_app_db_path
 from backend.app.models import SyncHistory
+from backend.routers.validate import resolve_db_path
 from backend.services.importer import import_data
 
 router = APIRouter(tags=["sync"])
@@ -20,8 +21,11 @@ def trigger_sync(req: SyncRequest, db: Session = Depends(get_db)):
     if not _sync_lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="Sync already in progress")
     try:
+        db_path = resolve_db_path(req.invoke_path.strip())
+        if not db_path:
+            raise HTTPException(status_code=400, detail=f"Could not find invokeai.db at {req.invoke_path}")
         app_db_path = get_app_db_path()
-        result = import_data(req.invoke_path, app_db_path)
+        result = import_data(db_path, app_db_path)
         return result
     finally:
         _sync_lock.release()
