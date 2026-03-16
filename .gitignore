@@ -6,8 +6,11 @@ dist/
 build/
 *.db
 .venv/
+.venv-*/
 venv/
 .env
+.claude/
+.superpowers/
 node_modules/
 frontend/dist/
 .pytest_cache/
