@@ -69,6 +69,8 @@ def get_family_distribution(session, user_id=None, start_date=None, end_date=Non
 
 def get_model_leaderboard(session, user_id=None, start_date=None, end_date=None):
     base = _apply_filters(session.query(Generation), user_id, start_date, end_date)
+
+    # Get model stats in a single query
     rows = (base.filter(Generation.model_name.isnot(None))
         .with_entities(Generation.model_name, Generation.model_base,
             func.count().label("cnt"), func.avg(Generation.steps).label("avg_steps"),
@@ -77,21 +79,26 @@ def get_model_leaderboard(session, user_id=None, start_date=None, end_date=None)
             func.max(Generation.created_at).label("last_used"))
         .group_by(Generation.model_name, Generation.model_base)
         .order_by(func.count().desc()).all())
-    results = []
-    for r in rows:
-        res_row = (base.filter(Generation.model_name == r[0])
-            .filter(Generation.width.isnot(None), Generation.height.isnot(None))
-            .with_entities(Generation.width, Generation.height, func.count().label("cnt"))
-            .group_by(Generation.width, Generation.height)
-            .order_by(func.count().desc()).first())
-        common_res = f"{res_row[0]}x{res_row[1]}" if res_row else None
-        results.append({"model_name": r[0], "model_base": r[1], "count": r[2],
-            "avg_steps": round(r[3], 1) if r[3] else None,
-            "avg_cfg": round(r[4], 1) if r[4] else None,
-            "common_resolution": common_res,
-            "first_used": str(r[5]) if r[5] else None,
-            "last_used": str(r[6]) if r[6] else None})
-    return results
+
+    # Get most common resolution per model in a single query
+    res_rows = (base
+        .filter(Generation.model_name.isnot(None), Generation.width.isnot(None), Generation.height.isnot(None))
+        .with_entities(Generation.model_name, Generation.width, Generation.height, func.count().label("cnt"))
+        .group_by(Generation.model_name, Generation.width, Generation.height)
+        .order_by(Generation.model_name, func.count().desc()).all())
+
+    # Keep only the top resolution per model
+    top_res: dict[str, str] = {}
+    for rr in res_rows:
+        if rr[0] not in top_res:
+            top_res[rr[0]] = f"{rr[1]}x{rr[2]}"
+
+    return [{"model_name": r[0], "model_base": r[1], "count": r[2],
+        "avg_steps": round(r[3], 1) if r[3] else None,
+        "avg_cfg": round(r[4], 1) if r[4] else None,
+        "common_resolution": top_res.get(r[0]),
+        "first_used": str(r[5]) if r[5] else None,
+        "last_used": str(r[6]) if r[6] else None} for r in rows]
 
 
 def get_resolution_distribution(session, user_id=None, start_date=None, end_date=None):

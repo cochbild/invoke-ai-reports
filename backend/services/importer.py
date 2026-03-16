@@ -72,19 +72,30 @@ def parse_session_model(session_data: Optional[dict]) -> tuple[Optional[str], Op
 
 
 def import_data(invoke_db_path: str, app_db_path: str) -> dict[str, int]:
+    """Import data from InvokeAI's database into the app database.
+
+    Uses a single transaction — if anything fails, the previous data is preserved.
+    """
     source_conn = sqlite3.connect(f"file:{invoke_db_path}?mode=ro", uri=True)
     source_conn.row_factory = sqlite3.Row
+    try:
+        return _do_import(source_conn, app_db_path, invoke_db_path)
+    finally:
+        source_conn.close()
+
+
+def _do_import(source_conn: sqlite3.Connection, app_db_path: str, source_path: str) -> dict[str, int]:
     engine = get_engine(app_db_path)
     Base.metadata.create_all(engine)
     images_imported = 0
     queue_items_imported = 0
 
     with Session(engine) as session:
+        # Delete and re-import in a single transaction
         session.query(GenerationLora).delete()
         session.query(Generation).delete()
         session.query(QueueItem).delete()
         session.query(User).delete()
-        session.commit()
 
         cursor = source_conn.execute(
             "SELECT image_name, user_id, created_at, width, height, metadata, starred, has_workflow FROM images"
@@ -148,7 +159,7 @@ def import_data(invoke_db_path: str, app_db_path: str) -> dict[str, int]:
             ))
 
         session.add(SyncHistory(
-            source_path=invoke_db_path, synced_at=datetime.now(),
+            source_path=source_path, synced_at=datetime.now(),
             images_imported=images_imported, queue_items_imported=queue_items_imported,
         ))
         session.commit()

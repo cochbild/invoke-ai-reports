@@ -1,6 +1,6 @@
 from datetime import date
-from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from typing import Literal, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
@@ -10,9 +10,12 @@ router = APIRouter(tags=["stats"])
 
 
 def _parse_date(d: Optional[str]) -> Optional[date]:
-    if d:
+    if not d:
+        return None
+    try:
         return date.fromisoformat(d)
-    return None
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: '{d}'. Use YYYY-MM-DD.")
 
 
 @router.get("/stats/overview")
@@ -22,14 +25,16 @@ def overview(user_id: Optional[str] = None, start_date: Optional[str] = None,
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))
 
 @router.get("/stats/models/top")
-def top_models(limit: int = 10, user_id: Optional[str] = None, start_date: Optional[str] = None,
-               end_date: Optional[str] = None, db: Session = Depends(get_db)):
+def top_models(limit: int = Query(default=10, ge=1, le=500), user_id: Optional[str] = None,
+               start_date: Optional[str] = None, end_date: Optional[str] = None,
+               db: Session = Depends(get_db)):
     return analytics.get_top_models(db, limit=limit, user_id=user_id,
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))
 
 @router.get("/stats/models/least")
-def least_models(limit: int = 10, user_id: Optional[str] = None, start_date: Optional[str] = None,
-                 end_date: Optional[str] = None, db: Session = Depends(get_db)):
+def least_models(limit: int = Query(default=10, ge=1, le=500), user_id: Optional[str] = None,
+                 start_date: Optional[str] = None, end_date: Optional[str] = None,
+                 db: Session = Depends(get_db)):
     return analytics.get_least_used_models(db, limit=limit, user_id=user_id,
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))
 
@@ -46,8 +51,9 @@ def leaderboard(user_id: Optional[str] = None, start_date: Optional[str] = None,
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))
 
 @router.get("/stats/prompts/top-tokens")
-def prompt_tokens(limit: int = 20, user_id: Optional[str] = None, start_date: Optional[str] = None,
-                  end_date: Optional[str] = None, db: Session = Depends(get_db)):
+def prompt_tokens(limit: int = Query(default=20, ge=1, le=500), user_id: Optional[str] = None,
+                  start_date: Optional[str] = None, end_date: Optional[str] = None,
+                  db: Session = Depends(get_db)):
     return analytics.get_prompt_top_tokens(db, limit=limit, user_id=user_id,
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))
 
@@ -58,7 +64,8 @@ def prompt_length(user_id: Optional[str] = None, start_date: Optional[str] = Non
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))
 
 @router.get("/stats/trends/volume")
-def volume_trend(granularity: str = "day", user_id: Optional[str] = None, start_date: Optional[str] = None,
+def volume_trend(granularity: Literal["day", "week", "month"] = "day",
+                 user_id: Optional[str] = None, start_date: Optional[str] = None,
                  end_date: Optional[str] = None, db: Session = Depends(get_db)):
     return analytics.get_volume_trend(db, granularity=granularity, user_id=user_id,
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))
@@ -70,7 +77,8 @@ def heatmap(user_id: Optional[str] = None, start_date: Optional[str] = None,
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))
 
 @router.get("/stats/trends/parameters")
-def param_trends(granularity: str = "month", user_id: Optional[str] = None, start_date: Optional[str] = None,
+def param_trends(granularity: Literal["day", "week", "month"] = "month",
+                 user_id: Optional[str] = None, start_date: Optional[str] = None,
                  end_date: Optional[str] = None, db: Session = Depends(get_db)):
     return analytics.get_parameter_trends(db, granularity=granularity, user_id=user_id,
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))

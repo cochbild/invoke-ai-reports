@@ -2,7 +2,6 @@ import os
 import platform
 import re
 import sqlite3
-from pathlib import Path
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -13,8 +12,8 @@ def _normalize_path(user_path: str) -> str:
     """Normalize a user-provided path for the current platform.
 
     Handles cross-platform scenarios:
-    - Windows path (G:\\InvokeUi) entered when server runs on WSL → /mnt/g/InvokeUi
-    - WSL path (/mnt/g/InvokeUi) entered when server runs on Windows → G:\\InvokeUi
+    - Windows path (G:\\InvokeUi) entered when server runs on WSL -> /mnt/g/InvokeUi
+    - WSL path (/mnt/g/InvokeUi) entered when server runs on Windows -> G:\\InvokeUi
     - Forward/backslash normalization
     """
     path = user_path.strip().rstrip("/\\")
@@ -44,10 +43,7 @@ def _normalize_path(user_path: str) -> str:
 def resolve_db_path(user_path: str) -> str | None:
     """Try to locate invokeai.db from a user-provided path.
 
-    Accepts:
-    - Main install dir (path/databases/invokeai.db)
-    - The databases dir directly (path/invokeai.db)
-    - Exact file path to the .db file
+    Only resolves to files named 'invokeai.db' to prevent path traversal.
     """
     normalized = _normalize_path(user_path)
     candidates = [
@@ -56,8 +52,9 @@ def resolve_db_path(user_path: str) -> str | None:
         normalized,
     ]
     for candidate in candidates:
-        if os.path.isfile(candidate):
-            return candidate
+        resolved = os.path.realpath(candidate)
+        if os.path.isfile(resolved) and os.path.basename(resolved) == "invokeai.db":
+            return resolved
     return None
 
 
@@ -69,8 +66,7 @@ class ValidateRequest(BaseModel):
 def validate_path(req: ValidateRequest):
     db_path = resolve_db_path(req.path)
     if not db_path:
-        normalized = _normalize_path(req.path)
-        return {"valid": False, "error": f"Could not find invokeai.db. Looked in: {normalized}/databases/ and {normalized}/"}
+        return {"valid": False, "error": "Could not find invokeai.db at the provided path."}
     try:
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         cursor = conn.execute("SELECT COUNT(*) FROM images")
@@ -82,8 +78,7 @@ def validate_path(req: ValidateRequest):
             "FROM images WHERE metadata IS NOT NULL AND json_extract(metadata, '$.model.name') IS NOT NULL"
         )
         model_count = cursor.fetchone()[0]
-
         conn.close()
         return {"valid": True, "image_count": image_count, "user_count": user_count, "model_count": model_count}
-    except Exception as e:
-        return {"valid": False, "error": str(e)}
+    except sqlite3.Error:
+        return {"valid": False, "error": "File exists but is not a valid InvokeAI database."}
