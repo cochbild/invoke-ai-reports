@@ -1,4 +1,3 @@
-import json
 import os
 import platform
 import re
@@ -78,17 +77,13 @@ def validate_path(req: ValidateRequest):
         image_count = cursor.fetchone()[0]
         cursor = conn.execute("SELECT COUNT(DISTINCT user_id) FROM images")
         user_count = cursor.fetchone()[0]
-        cursor = conn.execute("SELECT metadata FROM images WHERE metadata IS NOT NULL LIMIT 1000")
-        models = set()
-        for row in cursor:
-            try:
-                meta = json.loads(row[0])
-                model = meta.get("model", {})
-                if model and model.get("name"):
-                    models.add(model["name"])
-            except (json.JSONDecodeError, TypeError):
-                pass
+        cursor = conn.execute(
+            "SELECT COUNT(DISTINCT json_extract(metadata, '$.model.name')) "
+            "FROM images WHERE metadata IS NOT NULL AND json_extract(metadata, '$.model.name') IS NOT NULL"
+        )
+        model_count = cursor.fetchone()[0]
+
         conn.close()
-        return {"valid": True, "image_count": image_count, "user_count": user_count, "model_count": len(models)}
+        return {"valid": True, "image_count": image_count, "user_count": user_count, "model_count": model_count}
     except Exception as e:
         return {"valid": False, "error": str(e)}
