@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { validatePath, triggerSync, updateSettings } from '../api/client'
 import type { ValidationResult } from '../api/client'
 import { toaster } from '../toaster'
+import Surface from '../components/Surface'
 
 export default function SetupPage() {
   const [path, setPath] = useState('')
@@ -55,7 +56,7 @@ export default function SetupPage() {
 
   return (
     <Box minH="100vh" bg="#1a1a2e" display="flex" alignItems="center" justifyContent="center">
-      <Card.Root maxW="600px" w="full" mx={4} bg="surface.bg" borderColor="surface.border" borderWidth="1px" borderRadius="lg">
+      <Surface maxW="600px" w="full" mx={4}>
         <Card.Body>
           <VStack gap={6} align="stretch">
             <VStack gap={2}>
@@ -126,7 +127,7 @@ export default function SetupPage() {
             )}
           </VStack>
         </Card.Body>
-      </Card.Root>
+      </Surface>
     </Box>
   )
 }
