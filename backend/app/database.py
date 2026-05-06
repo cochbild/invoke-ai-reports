@@ -35,6 +35,15 @@ def get_app_db_path() -> str:
     return get_settings().app_db_path
 
 
+def reset_db_state():
+    """Test helper: clear the cached engine and the per-process db path so a
+    test starts from a known state. Safe to call between tests; never called
+    in production paths."""
+    global _app_db_path
+    _app_db_path = None
+    get_engine.cache_clear()
+
+
 def get_db():
     with Session(get_engine(get_app_db_path())) as session:
         yield session
