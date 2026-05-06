@@ -1,13 +1,19 @@
 // frontend/src/pages/SettingsPage.tsx
 import {
-  VStack, Heading, Card, CardBody, CardHeader, Input, Button,
-  Text, HStack, useToast,
-  Table, Tbody, Tr, Td,
+  VStack, Heading, Card, Input, Button, Text, HStack, Table,
 } from '@chakra-ui/react'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchSettings, updateSettings, clearData, fetchSyncStatus } from '../api/client'
 import type { AppSettings, SyncStatus } from '../api/client'
+import { toaster } from '../toaster'
+
+const cardStyle = {
+  bg: 'surface.bg',
+  borderColor: 'surface.border',
+  borderWidth: '1px',
+  borderRadius: 'lg',
+} as const
 
 export default function SettingsPage() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
@@ -15,7 +21,6 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [clearing, setClearing] = useState(false)
   const navigate = useNavigate()
-  const toast = useToast()
 
   useEffect(() => {
     fetchSettings().then((s: AppSettings) => { setNewPath(s.invoke_path || '') })
@@ -27,9 +32,9 @@ export default function SettingsPage() {
     try {
       const result = await updateSettings(newPath)
       setNewPath(result.invoke_path)
-      toast({ title: 'Settings saved', status: 'success', duration: 3000 })
+      toaster.create({ title: 'Settings saved', type: 'success', duration: 3000 })
     } catch {
-      toast({ title: 'Failed to save', status: 'error', duration: 3000 })
+      toaster.create({ title: 'Failed to save', type: 'error', duration: 3000 })
     } finally {
       setSaving(false)
     }
@@ -40,22 +45,22 @@ export default function SettingsPage() {
     setClearing(true)
     try {
       await clearData()
-      toast({ title: 'Data cleared', status: 'info', duration: 3000 })
+      toaster.create({ title: 'Data cleared', type: 'info', duration: 3000 })
       setTimeout(() => navigate('/setup'), 1000)
     } catch {
-      toast({ title: 'Failed to clear data', status: 'error', duration: 3000 })
+      toaster.create({ title: 'Failed to clear data', type: 'error', duration: 3000 })
     } finally {
       setClearing(false)
     }
   }
 
   return (
-    <VStack spacing={6} align="stretch">
+    <VStack gap={6} align="stretch">
       <Heading size="lg">Settings</Heading>
 
-      <Card>
-        <CardHeader><Heading size="sm">InvokeAI Installation Path</Heading></CardHeader>
-        <CardBody>
+      <Card.Root {...cardStyle}>
+        <Card.Header><Heading size="sm">InvokeAI Installation Path</Heading></Card.Header>
+        <Card.Body>
           <HStack>
             <Input
               value={newPath}
@@ -63,57 +68,57 @@ export default function SettingsPage() {
               placeholder="Path to InvokeAI installation"
               bg="surface.card" borderColor="surface.border"
             />
-            <Button colorScheme="blue" onClick={handleSave} isLoading={saving}>
+            <Button colorPalette="blue" onClick={handleSave} loading={saving}>
               Save
             </Button>
           </HStack>
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
 
-      <Card>
-        <CardHeader><Heading size="sm">Sync Status</Heading></CardHeader>
-        <CardBody>
+      <Card.Root {...cardStyle}>
+        <Card.Header><Heading size="sm">Sync Status</Heading></Card.Header>
+        <Card.Body>
           {syncStatus ? (
-            <Table variant="simple" size="sm">
-              <Tbody>
-                <Tr>
-                  <Td color="gray.400" fontWeight="medium">Last Sync</Td>
-                  <Td>{syncStatus.last_sync || 'Never'}</Td>
-                </Tr>
-                <Tr>
-                  <Td color="gray.400" fontWeight="medium">Source Path</Td>
-                  <Td>{syncStatus.source_path || '—'}</Td>
-                </Tr>
-                <Tr>
-                  <Td color="gray.400" fontWeight="medium">Images Imported</Td>
-                  <Td>{syncStatus.images_imported?.toLocaleString() ?? '—'}</Td>
-                </Tr>
-                <Tr>
-                  <Td color="gray.400" fontWeight="medium">Queue Items</Td>
-                  <Td>{syncStatus.queue_items_imported?.toLocaleString() ?? '—'}</Td>
-                </Tr>
-              </Tbody>
-            </Table>
+            <Table.Root size="sm">
+              <Table.Body>
+                <Table.Row>
+                  <Table.Cell color="gray.400" fontWeight="medium">Last Sync</Table.Cell>
+                  <Table.Cell>{syncStatus.last_sync || 'Never'}</Table.Cell>
+                </Table.Row>
+                <Table.Row>
+                  <Table.Cell color="gray.400" fontWeight="medium">Source Path</Table.Cell>
+                  <Table.Cell>{syncStatus.source_path || '—'}</Table.Cell>
+                </Table.Row>
+                <Table.Row>
+                  <Table.Cell color="gray.400" fontWeight="medium">Images Imported</Table.Cell>
+                  <Table.Cell>{syncStatus.images_imported?.toLocaleString() ?? '—'}</Table.Cell>
+                </Table.Row>
+                <Table.Row>
+                  <Table.Cell color="gray.400" fontWeight="medium">Queue Items</Table.Cell>
+                  <Table.Cell>{syncStatus.queue_items_imported?.toLocaleString() ?? '—'}</Table.Cell>
+                </Table.Row>
+              </Table.Body>
+            </Table.Root>
           ) : (
             <Text color="gray.500">Loading...</Text>
           )}
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
 
-      <Card>
-        <CardHeader><Heading size="sm" color="red.300">Danger Zone</Heading></CardHeader>
-        <CardBody>
-          <VStack align="start" spacing={3}>
+      <Card.Root {...cardStyle}>
+        <Card.Header><Heading size="sm" color="red.300">Danger Zone</Heading></Card.Header>
+        <Card.Body>
+          <VStack align="start" gap={3}>
             <Text color="gray.400">
               Clear all imported data and return to the setup screen.
               Your InvokeAI database is not affected.
             </Text>
-            <Button colorScheme="red" variant="outline" onClick={handleClear} isLoading={clearing}>
+            <Button colorPalette="red" variant="outline" onClick={handleClear} loading={clearing}>
               Clear All Data
             </Button>
           </VStack>
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
     </VStack>
   )
 }

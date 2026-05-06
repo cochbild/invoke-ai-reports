@@ -1,12 +1,12 @@
 // frontend/src/pages/SetupPage.tsx
 import {
-  Box, VStack, Heading, Text, Input, Button, Alert, AlertIcon,
-  Card, CardBody, HStack, Stat, StatLabel, StatNumber, useToast,
+  Box, VStack, Heading, Text, Input, Button, Alert, Card, HStack, Stat,
 } from '@chakra-ui/react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { validatePath, triggerSync, updateSettings } from '../api/client'
 import type { ValidationResult } from '../api/client'
+import { toaster } from '../toaster'
 
 export default function SetupPage() {
   const [path, setPath] = useState('')
@@ -15,7 +15,6 @@ export default function SetupPage() {
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
-  const toast = useToast()
 
   const handleValidate = async () => {
     if (!path.trim()) return
@@ -41,10 +40,11 @@ export default function SetupPage() {
     try {
       await updateSettings(path.trim())
       const result = await triggerSync(path.trim())
-      toast({
+      toaster.create({
         title: 'Import complete!',
         description: `Imported ${result.images_imported} images and ${result.queue_items_imported} queue items.`,
-        status: 'success', duration: 5000,
+        type: 'success',
+        duration: 5000,
       })
       setTimeout(() => navigate('/'), 1500)
     } catch {
@@ -55,17 +55,17 @@ export default function SetupPage() {
 
   return (
     <Box minH="100vh" bg="#1a1a2e" display="flex" alignItems="center" justifyContent="center">
-      <Card maxW="600px" w="full" mx={4}>
-        <CardBody>
-          <VStack spacing={6} align="stretch">
-            <VStack spacing={2}>
+      <Card.Root maxW="600px" w="full" mx={4} bg="surface.bg" borderColor="surface.border" borderWidth="1px" borderRadius="lg">
+        <Card.Body>
+          <VStack gap={6} align="stretch">
+            <VStack gap={2}>
               <Heading size="lg" color="accent.blue">InvokeAI Reports</Heading>
               <Text color="gray.400" textAlign="center">
                 Enter the path to your InvokeAI installation to get started.
               </Text>
             </VStack>
 
-            <VStack spacing={3}>
+            <VStack gap={3}>
               <Input
                 placeholder="e.g., C:\InvokeAI or /home/user/invokeai"
                 value={path}
@@ -75,55 +75,58 @@ export default function SetupPage() {
                 size="lg"
               />
               <Button
-                colorScheme="blue" w="full"
+                colorPalette="blue" w="full"
                 onClick={handleValidate}
-                isLoading={validating}
-                isDisabled={!path.trim()}
+                loading={validating}
+                disabled={!path.trim()}
               >
                 Validate Path
               </Button>
             </VStack>
 
             {error && (
-              <Alert status="error" borderRadius="md" bg="red.900">
-                <AlertIcon />
-                {error}
-              </Alert>
+              <Alert.Root status="error" borderRadius="md" bg="red.900">
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Description>{error}</Alert.Description>
+                </Alert.Content>
+              </Alert.Root>
             )}
 
             {validation && (
-              <VStack spacing={4}>
-                <Alert status="success" borderRadius="md" bg="green.900">
-                  <AlertIcon />
-                  Database found! Ready to import.
-                </Alert>
-                <HStack spacing={4} w="full">
-                  <Stat>
-                    <StatLabel color="gray.400">Images</StatLabel>
-                    <StatNumber color="accent.blue">{validation.image_count?.toLocaleString()}</StatNumber>
-                  </Stat>
-                  <Stat>
-                    <StatLabel color="gray.400">Models</StatLabel>
-                    <StatNumber color="accent.purple">{validation.model_count}</StatNumber>
-                  </Stat>
-                  <Stat>
-                    <StatLabel color="gray.400">Users</StatLabel>
-                    <StatNumber color="accent.teal">{validation.user_count}</StatNumber>
-                  </Stat>
+              <VStack gap={4}>
+                <Alert.Root status="success" borderRadius="md" bg="green.900">
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Description>Database found! Ready to import.</Alert.Description>
+                  </Alert.Content>
+                </Alert.Root>
+                <HStack gap={4} w="full">
+                  <Stat.Root>
+                    <Stat.Label color="gray.400">Images</Stat.Label>
+                    <Stat.ValueText color="accent.blue">{validation.image_count?.toLocaleString()}</Stat.ValueText>
+                  </Stat.Root>
+                  <Stat.Root>
+                    <Stat.Label color="gray.400">Models</Stat.Label>
+                    <Stat.ValueText color="accent.purple">{validation.model_count}</Stat.ValueText>
+                  </Stat.Root>
+                  <Stat.Root>
+                    <Stat.Label color="gray.400">Users</Stat.Label>
+                    <Stat.ValueText color="accent.teal">{validation.user_count}</Stat.ValueText>
+                  </Stat.Root>
                 </HStack>
                 <Button
-                  colorScheme="green" w="full" size="lg"
+                  colorPalette="green" w="full" size="lg"
                   onClick={handleImport}
-                  isLoading={importing}
-                  loadingText="Importing..."
+                  loading={importing}
                 >
-                  Import Data
+                  {importing ? 'Importing...' : 'Import Data'}
                 </Button>
               </VStack>
             )}
           </VStack>
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
     </Box>
   )
 }
