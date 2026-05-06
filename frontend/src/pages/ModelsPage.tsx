@@ -4,17 +4,17 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 import ChartCard from '../components/ChartCard'
-import { useApi } from '../hooks/useApi'
+import { useFiltered } from '../hooks/useFiltered'
 import {
   fetchTopModels, fetchLeastModels, fetchFamilyDistribution, fetchLeaderboard,
 } from '../api/client'
 import { CHART_COLORS } from '../theme'
 
 export default function ModelsPage() {
-  const topModels = useApi(fetchTopModels, { limit: 10 })
-  const leastModels = useApi(fetchLeastModels, { limit: 10 })
-  const families = useApi(fetchFamilyDistribution)
-  const leaderboard = useApi(fetchLeaderboard)
+  const topModels = useFiltered(fetchTopModels, { limit: 10 })
+  const leastModels = useFiltered(fetchLeastModels, { limit: 10 })
+  const families = useFiltered(fetchFamilyDistribution)
+  const leaderboard = useFiltered(fetchLeaderboard)
 
   return (
     <Box>

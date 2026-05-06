@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import { useState } from 'react'
 import ChartCard from '../components/ChartCard'
-import { useApi } from '../hooks/useApi'
+import { useFiltered } from '../hooks/useFiltered'
 import { fetchVolumeTrend, fetchParameterTrends, fetchHeatmap } from '../api/client'
 import { CHART_COLORS } from '../theme'
 
@@ -13,9 +13,9 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function TrendsPage() {
   const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>('week')
-  const volume = useApi(fetchVolumeTrend, { granularity })
-  const params = useApi(fetchParameterTrends, { granularity })
-  const heatmap = useApi(fetchHeatmap)
+  const volume = useFiltered(fetchVolumeTrend, { granularity })
+  const params = useFiltered(fetchParameterTrends, { granularity })
+  const heatmap = useFiltered(fetchHeatmap)
 
   // Build heatmap grid
   const heatmapGrid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0))
