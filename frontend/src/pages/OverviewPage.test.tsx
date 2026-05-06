@@ -1,8 +1,9 @@
 // frontend/src/pages/OverviewPage.test.tsx
 //
-// Behavior contract that the data-fetching layer (currently `useApi`, soon
-// TanStack Query — issue #20) must preserve. Tests describe what users see,
-// not how the hook is implemented.
+// Behavior contract for the data-fetching layer (TanStack Query under
+// `useFiltered`). Tests describe what users see, not how the hook is
+// implemented — they were written against the old useApi hook and pass
+// unchanged after the migration to useQuery.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, waitFor, cleanup } from '@testing-library/react'

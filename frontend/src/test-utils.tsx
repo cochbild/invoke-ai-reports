@@ -10,6 +10,7 @@
 import { render } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { ChakraProvider } from '@chakra-ui/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import { system } from './theme'
@@ -22,11 +23,19 @@ interface RenderOptions {
 
 export function renderWithProviders(ui: ReactElement, opts: RenderOptions = {}) {
   const { initialPath = '/' } = opts
+  // Fresh QueryClient per render so test cases don't leak cached data into
+  // each other. `retry: false` so a failed fetch surfaces as an error
+  // immediately instead of waiting for the default exponential-backoff retries.
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 0, refetchOnWindowFocus: false } },
+  })
   return render(
     <ChakraProvider value={system}>
-      <MemoryRouter initialEntries={[initialPath]}>
-        <FilterProvider>{ui}</FilterProvider>
-      </MemoryRouter>
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[initialPath]}>
+          <FilterProvider>{ui}</FilterProvider>
+        </MemoryRouter>
+      </QueryClientProvider>
     </ChakraProvider>,
   )
 }

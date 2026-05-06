@@ -6,19 +6,19 @@ import {
 } from 'recharts'
 import StatCard from '../components/StatCard'
 import ChartCard from '../components/ChartCard'
-import { useApi } from '../hooks/useApi'
+import { useFiltered } from '../hooks/useFiltered'
 import {
   fetchResolutions, fetchSchedulers, fetchSteps, fetchCfg, fetchLoras, fetchErrors,
 } from '../api/client'
 import { CHART_COLORS } from '../theme'
 
 export default function GenerationPage() {
-  const resolutions = useApi(fetchResolutions)
-  const schedulers = useApi(fetchSchedulers)
-  const steps = useApi(fetchSteps)
-  const cfg = useApi(fetchCfg)
-  const loras = useApi(fetchLoras)
-  const errors = useApi(fetchErrors)
+  const resolutions = useFiltered(fetchResolutions)
+  const schedulers = useFiltered(fetchSchedulers)
+  const steps = useFiltered(fetchSteps)
+  const cfg = useFiltered(fetchCfg)
+  const loras = useFiltered(fetchLoras)
+  const errors = useFiltered(fetchErrors)
 
   return (
     <Box>

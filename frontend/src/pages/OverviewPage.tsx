@@ -6,17 +6,17 @@ import {
 } from 'recharts'
 import StatCard from '../components/StatCard'
 import ChartCard from '../components/ChartCard'
-import { useApi } from '../hooks/useApi'
+import { useFiltered } from '../hooks/useFiltered'
 import {
   fetchOverview, fetchTopModels, fetchFamilyDistribution, fetchVolumeTrend,
 } from '../api/client'
 import { CHART_COLORS } from '../theme'
 
 export default function OverviewPage() {
-  const overview = useApi(fetchOverview)
-  const topModels = useApi(fetchTopModels, { limit: 5 })
-  const families = useApi(fetchFamilyDistribution)
-  const volume = useApi(fetchVolumeTrend, { granularity: 'week' })
+  const overview = useFiltered(fetchOverview)
+  const topModels = useFiltered(fetchTopModels, { limit: 5 })
+  const families = useFiltered(fetchFamilyDistribution)
+  const volume = useFiltered(fetchVolumeTrend, { granularity: 'week' })
 
   return (
     <Box>

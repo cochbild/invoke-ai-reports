@@ -4,14 +4,14 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import ChartCard from '../components/ChartCard'
-import { useApi } from '../hooks/useApi'
+import { useFiltered } from '../hooks/useFiltered'
 import { fetchTopTokens, fetchLengthDistribution } from '../api/client'
 import { CHART_COLORS } from '../theme'
 
 export default function PromptsPage() {
-  const topTokens = useApi(fetchTopTokens, { limit: 20 })
-  const cloudTokens = useApi(fetchTopTokens, { limit: 100 })
-  const lengths = useApi(fetchLengthDistribution)
+  const topTokens = useFiltered(fetchTopTokens, { limit: 20 })
+  const cloudTokens = useFiltered(fetchTopTokens, { limit: 100 })
+  const lengths = useFiltered(fetchLengthDistribution)
 
   const maxCount = Math.max(...(cloudTokens.data || []).map(t => t.count), 1)
 
