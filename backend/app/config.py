@@ -1,4 +1,4 @@
-from pathlib import Path
+from functools import lru_cache
 from typing import Optional
 
 from pydantic_settings import BaseSettings
@@ -13,5 +13,6 @@ class Settings(BaseSettings):
     port: int = 9876
 
 
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()

@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session
 
@@ -6,15 +8,15 @@ class Base(DeclarativeBase):
     pass
 
 
+@lru_cache(maxsize=None)
 def get_engine(db_path: str = "reports.db"):
-    """Create SQLAlchemy engine for the app database."""
+    """Return a SQLAlchemy engine for the app database, cached per db_path."""
     return create_engine(f"sqlite:///{db_path}", echo=False)
 
 
 def get_session(db_path: str = "reports.db"):
-    """Create a new database session."""
-    engine = get_engine(db_path)
-    return Session(engine)
+    """Create a new database session bound to the cached engine."""
+    return Session(get_engine(db_path))
 
 
 from backend.app.config import get_settings  # noqa: E402
@@ -34,6 +36,5 @@ def get_app_db_path() -> str:
 
 
 def get_db():
-    engine = get_engine(get_app_db_path())
-    with Session(engine) as session:
+    with Session(get_engine(get_app_db_path())) as session:
         yield session
