@@ -1,5 +1,5 @@
 // frontend/src/components/ChartCard.tsx
-import { Card, CardBody, CardHeader, Heading, Skeleton, Text } from '@chakra-ui/react'
+import { Card, Heading, Skeleton, Text } from '@chakra-ui/react'
 import type { ReactNode } from 'react'
 
 interface ChartCardProps {
@@ -12,11 +12,11 @@ interface ChartCardProps {
 
 export default function ChartCard({ title, children, loading, error, height = '300px' }: ChartCardProps) {
   return (
-    <Card>
-      <CardHeader pb={0}>
+    <Card.Root bg="surface.bg" borderColor="surface.border" borderWidth="1px" borderRadius="lg">
+      <Card.Header pb={0}>
         <Heading size="sm" color="gray.300">{title}</Heading>
-      </CardHeader>
-      <CardBody>
+      </Card.Header>
+      <Card.Body>
         {error ? (
           <Text color="red.300">Error: {error}</Text>
         ) : loading ? (
@@ -24,7 +24,7 @@ export default function ChartCard({ title, children, loading, error, height = '3
         ) : (
           children
         )}
-      </CardBody>
-    </Card>
+      </Card.Body>
+    </Card.Root>
   )
 }

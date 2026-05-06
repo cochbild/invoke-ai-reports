@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes'
 import { BrowserRouter } from 'react-router-dom'
 import { system } from './theme'
 import { FilterProvider } from './context/FilterContext'
+import { Toaster } from './toaster'
 import App from './App'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -14,6 +15,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <BrowserRouter>
           <FilterProvider>
             <App />
+            <Toaster />
           </FilterProvider>
         </BrowserRouter>
       </ThemeProvider>
