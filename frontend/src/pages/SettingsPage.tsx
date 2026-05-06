@@ -7,13 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { fetchSettings, updateSettings, clearData, fetchSyncStatus } from '../api/client'
 import type { AppSettings, SyncStatus } from '../api/client'
 import { toaster } from '../toaster'
-
-const cardStyle = {
-  bg: 'surface.bg',
-  borderColor: 'surface.border',
-  borderWidth: '1px',
-  borderRadius: 'lg',
-} as const
+import Surface from '../components/Surface'
 
 export default function SettingsPage() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
@@ -58,7 +52,7 @@ export default function SettingsPage() {
     <VStack gap={6} align="stretch">
       <Heading size="lg">Settings</Heading>
 
-      <Card.Root {...cardStyle}>
+      <Surface>
         <Card.Header><Heading size="sm">InvokeAI Installation Path</Heading></Card.Header>
         <Card.Body>
           <HStack>
@@ -73,9 +67,9 @@ export default function SettingsPage() {
             </Button>
           </HStack>
         </Card.Body>
-      </Card.Root>
+      </Surface>
 
-      <Card.Root {...cardStyle}>
+      <Surface>
         <Card.Header><Heading size="sm">Sync Status</Heading></Card.Header>
         <Card.Body>
           {syncStatus ? (
@@ -103,9 +97,9 @@ export default function SettingsPage() {
             <Text color="gray.500">Loading...</Text>
           )}
         </Card.Body>
-      </Card.Root>
+      </Surface>
 
-      <Card.Root {...cardStyle}>
+      <Surface>
         <Card.Header><Heading size="sm" color="red.300">Danger Zone</Heading></Card.Header>
         <Card.Body>
           <VStack align="start" gap={3}>
@@ -118,7 +112,7 @@ export default function SettingsPage() {
             </Button>
           </VStack>
         </Card.Body>
-      </Card.Root>
+      </Surface>
     </VStack>
   )
 }

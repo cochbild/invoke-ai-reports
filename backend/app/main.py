@@ -1,8 +1,9 @@
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -32,12 +33,13 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="InvokeAI Reports", lifespan=lifespan)
+    s = get_settings()
+    origins = [f"http://{s.host}:{s.port}", f"http://localhost:{s.port}"]
+    if s.dev_cors:
+        origins += ["http://localhost:5173", "http://127.0.0.1:5173"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173", "http://127.0.0.1:5173",  # Vite dev server
-            "http://localhost:9876", "http://127.0.0.1:9876",  # Production
-        ],
+        allow_origins=origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -46,9 +48,36 @@ def create_app() -> FastAPI:
     app.include_router(stats.router, prefix="/api")
     app.include_router(settings.router, prefix="/api")
     app.include_router(validate.router, prefix="/api")
-    frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
+
+    frontend_dist = os.path.realpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
+    )
     if os.path.isdir(frontend_dist):
-        app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+        # Hashed asset bundles served from /assets with cache-friendly StaticFiles.
+        assets_dir = os.path.join(frontend_dist, "assets")
+        if os.path.isdir(assets_dir):
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+        index_html = os.path.join(frontend_dist, "index.html")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def spa_fallback(full_path: str):
+            # API routers are registered above and take priority. A GET to an
+            # unknown /api/... path should still 404, not return HTML.
+            if full_path.startswith("api/"):
+                raise HTTPException(status_code=404)
+            # Serve real files (favicon.ico, vite.svg, etc.) if present, with
+            # a path-traversal guard. Anything else falls through to index.html
+            # so React Router can handle the route on the client.
+            candidate = os.path.realpath(os.path.join(frontend_dist, full_path))
+            if (
+                full_path
+                and os.path.isfile(candidate)
+                and os.path.commonpath([candidate, frontend_dist]) == frontend_dist
+            ):
+                return FileResponse(candidate)
+            return FileResponse(index_html)
+
     return app
 
 

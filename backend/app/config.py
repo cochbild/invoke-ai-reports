@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     invoke_db_path: Optional[str] = None
     host: str = "127.0.0.1"
     port: int = 9876
+    # Allow the Vite dev server (5173) to call the API. Off by default; set
+    # INVOKE_REPORTS_DEV_CORS=1 when running `npm run dev` against this backend.
+    dev_cors: bool = False
 
 
 @lru_cache(maxsize=1)

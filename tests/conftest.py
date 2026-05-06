@@ -5,9 +5,18 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from backend.app.database import Base, get_engine, get_session
+from backend.app.database import Base, get_engine, get_session, reset_db_state
 import backend.app.models  # noqa: F401 — registers all ORM models on Base.metadata
 from backend.app.models import Generation, GenerationLora, QueueItem, User, SyncHistory
+
+
+@pytest.fixture(autouse=True)
+def _reset_db_state():
+    """Ensure each test starts with a clean engine cache and no leaked
+    set_app_db_path() override from a prior test."""
+    reset_db_state()
+    yield
+    reset_db_state()
 
 
 @pytest.fixture

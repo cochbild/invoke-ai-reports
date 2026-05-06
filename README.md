@@ -83,6 +83,7 @@ Environment variables (prefix `INVOKE_REPORTS_`):
 | `INVOKE_REPORTS_PORT` | `9876` | Server port |
 | `INVOKE_REPORTS_HOST` | `127.0.0.1` | Server host |
 | `INVOKE_REPORTS_APP_DB_PATH` | `reports.db` | Path to app database |
+| `INVOKE_REPORTS_DEV_CORS` | `false` | Allow Vite dev server (`:5173`) origin — set when running `npm run dev` |
 
 ## Development
 
