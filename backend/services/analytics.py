@@ -8,6 +8,13 @@ from sqlalchemy.orm import Session
 from backend.app.models import Generation, GenerationLora, QueueItem
 from backend.services.prompt_analyzer import tokenize_prompt, analyze_tokens
 
+# Defensive ceiling on grouped distributions ordered by count desc. Keeps a
+# pathological corpus (10k+ unique resolutions / loras / cfg values) from
+# returning a multi-megabyte JSON payload that browsers and the chart layer
+# can't reasonably render anyway. The truncation keeps the highest-count
+# groups, which is what these "top-by-usage" endpoints are about.
+_MAX_ROWS = 1000
+
 
 def _next_day(d: date) -> str:
     from datetime import timedelta
@@ -78,7 +85,7 @@ def get_model_leaderboard(session, user_id=None, start_date=None, end_date=None)
             func.min(Generation.created_at).label("first_used"),
             func.max(Generation.created_at).label("last_used"))
         .group_by(Generation.model_name, Generation.model_base)
-        .order_by(func.count().desc()).all())
+        .order_by(func.count().desc()).limit(_MAX_ROWS).all())
 
     # Get most common resolution per model in a single query
     res_rows = (base
@@ -105,7 +112,8 @@ def get_resolution_distribution(session, user_id=None, start_date=None, end_date
     base = _apply_filters(session.query(Generation), user_id, start_date, end_date)
     rows = (base.filter(Generation.width.isnot(None), Generation.height.isnot(None))
         .with_entities(Generation.width, Generation.height, func.count().label("cnt"))
-        .group_by(Generation.width, Generation.height).order_by(func.count().desc()).all())
+        .group_by(Generation.width, Generation.height)
+        .order_by(func.count().desc()).limit(_MAX_ROWS).all())
     return [{"resolution": f"{r[0]}x{r[1]}", "width": r[0], "height": r[1], "count": r[2]} for r in rows]
 
 
@@ -129,7 +137,8 @@ def get_cfg_distribution(session, user_id=None, start_date=None, end_date=None):
     base = _apply_filters(session.query(Generation), user_id, start_date, end_date)
     rows = (base.filter(Generation.cfg_scale.isnot(None))
         .with_entities(Generation.cfg_scale, func.count().label("cnt"))
-        .group_by(Generation.cfg_scale).order_by(Generation.cfg_scale).all())
+        .group_by(Generation.cfg_scale)
+        .order_by(func.count().desc()).limit(_MAX_ROWS).all())
     return [{"cfg_scale": r[0], "count": r[1]} for r in rows]
 
 
@@ -141,7 +150,8 @@ def get_lora_stats(session, user_id=None, start_date=None, end_date=None):
         .filter(GenerationLora.generation_id.in_(session.query(filtered_ids))).scalar() or 0)
     lora_rows = (session.query(GenerationLora.lora_name, func.count().label("cnt"))
         .filter(GenerationLora.generation_id.in_(session.query(filtered_ids)))
-        .group_by(GenerationLora.lora_name).order_by(func.count().desc()).all())
+        .group_by(GenerationLora.lora_name)
+        .order_by(func.count().desc()).limit(_MAX_ROWS).all())
     top_loras = [{"lora_name": r[0], "count": r[1]} for r in lora_rows]
     return {"total_with_lora": with_lora,
             "pct_with_lora": round((with_lora / total * 100), 1) if total > 0 else 0,
@@ -157,10 +167,12 @@ def get_error_stats(session, user_id=None, start_date=None, end_date=None):
     failed = base.filter(QueueItem.status == "failed").count()
     by_error = (base.filter(QueueItem.error_type.isnot(None))
         .with_entities(QueueItem.error_type, func.count().label("cnt"))
-        .group_by(QueueItem.error_type).order_by(func.count().desc()).all())
+        .group_by(QueueItem.error_type)
+        .order_by(func.count().desc()).limit(_MAX_ROWS).all())
     by_model = (base.filter(QueueItem.status == "failed", QueueItem.model_name.isnot(None))
         .with_entities(QueueItem.model_name, func.count().label("cnt"))
-        .group_by(QueueItem.model_name).order_by(func.count().desc()).all())
+        .group_by(QueueItem.model_name)
+        .order_by(func.count().desc()).limit(_MAX_ROWS).all())
     return {"total_items": total, "total_failed": failed,
             "failure_rate": round((failed / total * 100), 1) if total > 0 else 0,
             "by_error_type": [{"error_type": r[0], "count": r[1]} for r in by_error],
