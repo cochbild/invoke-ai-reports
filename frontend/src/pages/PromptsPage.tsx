@@ -1,5 +1,5 @@
 // frontend/src/pages/PromptsPage.tsx
-import { Box, SimpleGrid, Wrap, WrapItem, Text } from '@chakra-ui/react'
+import { Box, SimpleGrid, Wrap, Text } from '@chakra-ui/react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -18,27 +18,26 @@ export default function PromptsPage() {
   return (
     <Box>
       <ChartCard title="Token Word Cloud" loading={cloudTokens.loading} error={cloudTokens.error} height="250px">
-        <Wrap spacing={2} justify="center" p={4}>
+        <Wrap gap={2} justify="center" p={4}>
           {(cloudTokens.data || []).map((t, i) => {
             const size = 12 + (t.count / maxCount) * 28
             return (
-              <WrapItem key={t.token}>
-                <Text
-                  fontSize={`${size}px`}
-                  color={CHART_COLORS[i % CHART_COLORS.length]}
-                  fontWeight={size > 24 ? 'bold' : 'normal'}
-                  title={`${t.token}: ${t.count}`}
-                  cursor="default"
-                >
-                  {t.token}
-                </Text>
-              </WrapItem>
+              <Text
+                key={t.token}
+                fontSize={`${size}px`}
+                color={CHART_COLORS[i % CHART_COLORS.length]}
+                fontWeight={size > 24 ? 'bold' : 'normal'}
+                title={`${t.token}: ${t.count}`}
+                cursor="default"
+              >
+                {t.token}
+              </Text>
             )
           })}
         </Wrap>
       </ChartCard>
 
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mt={4}>
+      <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4} mt={4}>
         <ChartCard title="Top 20 Tokens" loading={topTokens.loading} error={topTokens.error}>
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={topTokens.data || []} layout="vertical" margin={{ left: 100 }}>

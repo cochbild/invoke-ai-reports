@@ -1,5 +1,5 @@
 // frontend/src/pages/TrendsPage.tsx
-import { Box, SimpleGrid, HStack, Button, Table, Thead, Tbody, Tr, Th, Td } from '@chakra-ui/react'
+import { Box, SimpleGrid, HStack, Button, Table } from '@chakra-ui/react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
@@ -26,16 +26,16 @@ export default function TrendsPage() {
 
   return (
     <Box>
-      <HStack mb={4} spacing={2}>
+      <HStack mb={4} gap={2}>
         {(['day', 'week', 'month'] as const).map(g => (
           <Button key={g} size="sm" variant={granularity === g ? 'solid' : 'outline'}
-            colorScheme="blue" onClick={() => setGranularity(g)}>
+            colorPalette="blue" onClick={() => setGranularity(g)}>
             {g.charAt(0).toUpperCase() + g.slice(1)}
           </Button>
         ))}
       </HStack>
 
-      <SimpleGrid columns={{ base: 1 }} spacing={4} mb={6}>
+      <SimpleGrid columns={{ base: 1 }} gap={4} mb={6}>
         <ChartCard title="Generation Volume" loading={volume.loading} error={volume.error}>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={volume.data || []}>
@@ -66,38 +66,38 @@ export default function TrendsPage() {
 
       <ChartCard title="Activity Heatmap" loading={heatmap.loading} error={heatmap.error} height="220px">
         <Box overflowX="auto">
-          <Table size="sm" variant="unstyled">
-            <Thead>
-              <Tr>
-                <Th w="60px"></Th>
+          <Table.Root size="sm" variant="outline">
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeader w="60px"></Table.ColumnHeader>
                 {Array.from({ length: 24 }, (_, h) => (
-                  <Th key={h} p={1} textAlign="center" fontSize="xs" color="gray.500">
+                  <Table.ColumnHeader key={h} p={1} textAlign="center" fontSize="xs" color="gray.500">
                     {h}
-                  </Th>
+                  </Table.ColumnHeader>
                 ))}
-              </Tr>
-            </Thead>
-            <Tbody>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
               {DAYS.map((day, di) => (
-                <Tr key={day}>
-                  <Td fontSize="xs" color="gray.400" p={1}>{day}</Td>
+                <Table.Row key={day}>
+                  <Table.Cell fontSize="xs" color="gray.400" p={1}>{day}</Table.Cell>
                   {Array.from({ length: 24 }, (_, h) => {
                     const count = heatmapGrid[di][h]
                     const intensity = count / heatMax
                     return (
-                      <Td key={h} p={1}>
+                      <Table.Cell key={h} p={1}>
                         <Box
                           w="20px" h="20px" borderRadius="sm"
                           bg={count === 0 ? 'surface.border' : `rgba(77, 156, 255, ${0.15 + intensity * 0.85})`}
                           title={`${day} ${h}:00 — ${count} images`}
                         />
-                      </Td>
+                      </Table.Cell>
                     )
                   })}
-                </Tr>
+                </Table.Row>
               ))}
-            </Tbody>
-          </Table>
+            </Table.Body>
+          </Table.Root>
         </Box>
       </ChartCard>
     </Box>
