@@ -39,6 +39,11 @@ export function useApi<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paramsKey])
 
+  // eslint-plugin-react-hooks 7.1+ flags this as set-state-in-effect because
+  // load() synchronously calls setLoading/setError. The pattern is the
+  // standard data-fetching idiom for this app's scale; revisit if/when we
+  // migrate to TanStack Query (tracked in an issue).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
 
   return { data, loading, error, refetch: load }
@@ -61,6 +66,7 @@ export function useApiNoFilter<T>(fetcher: () => Promise<T>): UseApiResult<T> {
     }
   }, [fetcher])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
 
   return { data, loading, error, refetch: load }
