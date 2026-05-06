@@ -16,6 +16,7 @@ def make_invoke_db(path: str):
             image_name TEXT PRIMARY KEY,
             user_id TEXT,
             created_at TEXT,
+            updated_at TEXT,
             width INTEGER,
             height INTEGER,
             metadata TEXT,
@@ -30,6 +31,7 @@ def make_invoke_db(path: str):
             session TEXT,
             status TEXT,
             created_at TEXT,
+            updated_at TEXT,
             started_at TEXT,
             completed_at TEXT,
             error_type TEXT,
@@ -53,8 +55,9 @@ def make_invoke_db(path: str):
         "height": 1024,
     })
     conn.execute(
-        "INSERT INTO images VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        ("img-test-001", "user-test", "2026-01-01 10:00:00", 1024, 1024, meta, 0, 0),
+        "INSERT INTO images VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("img-test-001", "user-test", "2026-01-01 10:00:00", "2026-01-01 10:00:00",
+         1024, 1024, meta, 0, 0),
     )
     conn.execute(
         "INSERT INTO users VALUES (?, ?)",

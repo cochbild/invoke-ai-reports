@@ -149,3 +149,103 @@ def test_import_data_idempotent(invoke_db, app_db_path):
     with Session(engine) as session:
         assert session.query(Generation).count() == 3
         assert session.query(SyncHistory).count() == 2
+
+
+def _add_image(invoke_db_path: str, image_name: str, created_at: str, metadata: dict | None = None):
+    """Append a row to the source images table."""
+    conn = sqlite3.connect(invoke_db_path)
+    conn.execute(
+        "INSERT INTO images (image_name, created_at, updated_at, metadata, user_id) VALUES (?, ?, ?, ?, ?)",
+        (image_name, created_at, created_at, json.dumps(metadata) if metadata else None, "system"),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_import_picks_up_new_rows_after_watermark(invoke_db, app_db_path):
+    """Second sync should pull only rows created after the previous watermark."""
+    first = import_data(invoke_db, app_db_path)
+    assert first["images_imported"] == 3
+
+    # Add a row strictly after the existing latest created_at (2026-01-17 10:30:00)
+    _add_image(invoke_db, "img-004.png", "2026-02-01 09:00:00", metadata={
+        "model": {"name": "FluxDev", "base": "flux"}, "steps": 20, "cfg_scale": 1.0,
+    })
+
+    second = import_data(invoke_db, app_db_path)
+    # Watermark uses >= so the boundary row may be re-fetched; the new row must be included
+    assert second["images_imported"] >= 1
+    engine = get_engine(app_db_path)
+    with Session(engine) as session:
+        assert session.query(Generation).count() == 4
+        new_gen = session.query(Generation).filter_by(image_name="img-004.png").first()
+        assert new_gen is not None
+        assert new_gen.model_name == "FluxDev"
+
+
+def test_import_upserts_modified_rows(invoke_db, app_db_path):
+    """Re-importing a row whose source metadata changed should update the row, not duplicate it."""
+    import_data(invoke_db, app_db_path)
+
+    # Mutate img-001's metadata in source: change model name and steps
+    new_metadata = json.dumps({
+        "model": {"name": "Juggernaut XL v10", "base": "sdxl"},
+        "steps": 50, "cfg_scale": 8.0, "scheduler": "euler",
+        "loras": [],
+    })
+    conn = sqlite3.connect(invoke_db)
+    conn.execute(
+        "UPDATE images SET metadata = ?, updated_at = ? WHERE image_name = ?",
+        (new_metadata, "2026-02-15 12:00:00", "img-001.png"),
+    )
+    conn.commit()
+    conn.close()
+
+    import_data(invoke_db, app_db_path)
+    engine = get_engine(app_db_path)
+    with Session(engine) as session:
+        assert session.query(Generation).count() == 3  # no duplicate
+        gen = session.query(Generation).filter_by(image_name="img-001.png").first()
+        assert gen.model_name == "Juggernaut XL v10"
+        assert gen.steps == 50
+        # LoRAs were removed in the new metadata; existing ones should be cleared
+        assert session.query(GenerationLora).filter_by(generation_id=gen.id).count() == 0
+
+
+def test_import_watermark_boundary_does_not_lose_rows(invoke_db, app_db_path):
+    """A row inserted with the exact same created_at as the watermark must not be missed."""
+    import_data(invoke_db, app_db_path)
+
+    # Insert a row with the same timestamp as the current max (2026-01-17 10:30:00)
+    _add_image(invoke_db, "img-boundary.png", "2026-01-17 10:30:00", metadata={
+        "model": {"name": "BoundaryModel", "base": "sdxl"},
+    })
+
+    import_data(invoke_db, app_db_path)
+    engine = get_engine(app_db_path)
+    with Session(engine) as session:
+        boundary = session.query(Generation).filter_by(image_name="img-boundary.png").first()
+        assert boundary is not None, "boundary row at watermark timestamp must be imported"
+        assert boundary.model_name == "BoundaryModel"
+
+
+def test_import_queue_dedup_does_not_collide_on_status_change(invoke_db, app_db_path):
+    """A queue item that legitimately progresses through statuses must remain a single row."""
+    import_data(invoke_db, app_db_path)
+
+    # Source: an existing failed item now has a retry that succeeded — same session_id, different status
+    conn = sqlite3.connect(invoke_db)
+    conn.execute(
+        "INSERT INTO session_queue (batch_id,session_id,session,status,created_at,updated_at,user_id) VALUES (?,?,?,?,?,?,?)",
+        ("batch-002-retry", "session-002", "{}", "completed", "2026-01-15 11:30:00", "2026-01-15 11:30:01", "system"),
+    )
+    conn.commit()
+    conn.close()
+
+    import_data(invoke_db, app_db_path)
+    engine = get_engine(app_db_path)
+    with Session(engine) as session:
+        # Two distinct (session_id, status) pairs for session-002 → both should exist
+        items = session.query(QueueItem).filter_by(session_id="session-002").all()
+        statuses = sorted(i.status for i in items)
+        assert statuses == ["completed", "failed"], f"expected both statuses retained, got {statuses}"

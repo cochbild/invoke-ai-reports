@@ -8,7 +8,11 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from backend.app.database import Base, get_engine
-from backend.app.models import Generation, GenerationLora, QueueItem, User, SyncHistory
+from backend.app.models import Generation, GenerationLora, QueueItem, User, SyncHistory, AppSetting
+
+_WATERMARK_IMAGES = "source_images_updated_at"
+_WATERMARK_QUEUE = "source_queue_updated_at"
+_SYNC_HISTORY_KEEP = 50
 
 _DT_FORMATS = (
     "%Y-%m-%d %H:%M:%S.%f",
@@ -89,40 +93,79 @@ def import_data(invoke_db_path: str, app_db_path: str) -> dict[str, int]:
         source_conn.close()
 
 
+def _get_watermark(session: Session, key: str) -> Optional[str]:
+    row = session.query(AppSetting).filter_by(key=key).first()
+    return row.value if row else None
+
+
+def _set_watermark(session: Session, key: str, value: str):
+    row = session.query(AppSetting).filter_by(key=key).first()
+    if row:
+        row.value = value
+    else:
+        session.add(AppSetting(key=key, value=value))
+
+
+def _prune_sync_history(session: Session, keep: int = _SYNC_HISTORY_KEEP):
+    """Keep only the most recent N SyncHistory rows."""
+    from sqlalchemy import select
+    keep_ids = select(SyncHistory.id).order_by(
+        SyncHistory.synced_at.desc()
+    ).limit(keep).scalar_subquery()
+    session.query(SyncHistory).filter(SyncHistory.id.notin_(keep_ids)).delete(
+        synchronize_session=False
+    )
+
+
 def _do_import(source_conn: sqlite3.Connection, app_db_path: str, source_path: str) -> dict[str, int]:
     engine = get_engine(app_db_path)
     Base.metadata.create_all(engine)
 
     with Session(engine) as session:
-        gen_watermark = session.query(func.max(Generation.created_at)).scalar()
-        queue_watermark = session.query(func.max(QueueItem.created_at)).scalar()
+        # Watermark on source.updated_at, not created_at — created_at can't detect
+        # in-place mutations to existing rows. Stored in AppSetting because
+        # Generation/QueueItem don't carry source.updated_at.
+        gen_watermark = _get_watermark(session, _WATERMARK_IMAGES)
+        queue_watermark = _get_watermark(session, _WATERMARK_QUEUE)
 
-        images_imported = _import_images(source_conn, session, gen_watermark)
-        queue_items_imported = _import_queue_items(source_conn, session, queue_watermark)
+        images_imported, new_gen_wm = _import_images(source_conn, session, gen_watermark)
+        queue_items_imported, new_queue_wm = _import_queue_items(source_conn, session, queue_watermark)
         _refresh_users(source_conn, session)
+
+        if new_gen_wm:
+            _set_watermark(session, _WATERMARK_IMAGES, new_gen_wm)
+        if new_queue_wm:
+            _set_watermark(session, _WATERMARK_QUEUE, new_queue_wm)
 
         session.add(SyncHistory(
             source_path=source_path, synced_at=datetime.now(),
             images_imported=images_imported, queue_items_imported=queue_items_imported,
         ))
+        _prune_sync_history(session)
         session.commit()
 
     return {"images_imported": images_imported, "queue_items_imported": queue_items_imported}
 
 
-def _import_images(source: sqlite3.Connection, session: Session, watermark: Optional[datetime]) -> int:
-    base_sql = ("SELECT image_name, user_id, created_at, width, height, metadata, "
+def _import_images(
+    source: sqlite3.Connection, session: Session, watermark: Optional[str]
+) -> tuple[int, Optional[str]]:
+    base_sql = ("SELECT image_name, user_id, created_at, updated_at, width, height, metadata, "
                 "starred, has_workflow FROM images")
     if watermark:
-        cursor = source.execute(base_sql + " WHERE created_at >= ?", (str(watermark),))
+        cursor = source.execute(base_sql + " WHERE updated_at >= ?", (watermark,))
     else:
         cursor = source.execute(base_sql)
 
     gen_batch: list[dict] = []
     lora_groups: list[tuple[str, list[dict]]] = []
     total = 0
+    max_updated_at: Optional[str] = watermark
 
     for row in cursor:
+        row_updated = row["updated_at"]
+        if row_updated and (max_updated_at is None or str(row_updated) > max_updated_at):
+            max_updated_at = str(row_updated)
         metadata_str = row["metadata"]
         metadata = json.loads(metadata_str) if metadata_str else None
         parsed = parse_image_metadata(metadata)
@@ -155,7 +198,7 @@ def _import_images(source: sqlite3.Connection, session: Session, watermark: Opti
     if gen_batch:
         _flush_images(session, gen_batch, lora_groups)
 
-    return total
+    return total, max_updated_at
 
 
 def _flush_images(session: Session, gen_rows: list[dict], lora_groups: list[tuple[str, list[dict]]]):
@@ -166,21 +209,22 @@ def _flush_images(session: Session, gen_rows: list[dict], lora_groups: list[tupl
     stmt = stmt.on_conflict_do_update(index_elements=["image_name"], set_=update_cols)
     session.execute(stmt)
 
-    if not lora_groups:
-        return
-
-    image_names = [name for name, _ in lora_groups]
+    # Resolve image_name -> generation_id for every row in this batch. We need
+    # the IDs even for images with no new LoRAs because re-imports may need to
+    # *clear* LoRAs that were dropped from the source metadata.
+    all_image_names = [g["image_name"] for g in gen_rows]
     id_map = dict(
         session.query(Generation.image_name, Generation.id)
-        .filter(Generation.image_name.in_(image_names)).all()
+        .filter(Generation.image_name.in_(all_image_names)).all()
     )
-
-    # Re-imports may already have LoRA rows for these generations; replace them.
-    gen_ids = [id_map[name] for name in image_names if name in id_map]
-    if gen_ids:
+    all_gen_ids = list(id_map.values())
+    if all_gen_ids:
         session.query(GenerationLora).filter(
-            GenerationLora.generation_id.in_(gen_ids)
+            GenerationLora.generation_id.in_(all_gen_ids)
         ).delete(synchronize_session=False)
+
+    if not lora_groups:
+        return
 
     lora_rows = []
     for image_name, loras in lora_groups:
@@ -199,19 +243,26 @@ def _flush_images(session: Session, gen_rows: list[dict], lora_groups: list[tupl
         session.execute(sqlite_insert(GenerationLora).values(lora_rows))
 
 
-def _import_queue_items(source: sqlite3.Connection, session: Session, watermark: Optional[datetime]) -> int:
-    base_sql = ("""SELECT batch_id, session_id, session, status, created_at,
+def _import_queue_items(
+    source: sqlite3.Connection, session: Session, watermark: Optional[str]
+) -> tuple[int, Optional[str]]:
+    base_sql = ("""SELECT batch_id, session_id, session, status, created_at, updated_at,
                           started_at, completed_at, error_type, error_message, user_id
                    FROM session_queue""")
     if watermark:
-        cursor = source.execute(base_sql + " WHERE created_at >= ?", (str(watermark),))
+        cursor = source.execute(base_sql + " WHERE updated_at >= ?", (watermark,))
     else:
         cursor = source.execute(base_sql)
 
     batch: list[dict] = []
     total = 0
+    max_updated_at: Optional[str] = watermark
 
     for row in cursor:
+        row_updated = row["updated_at"]
+        if row_updated and (max_updated_at is None or str(row_updated) > max_updated_at):
+            max_updated_at = str(row_updated)
+
         session_str = row["session"]
         session_data = json.loads(session_str) if session_str else None
         model_name, model_base = parse_session_model(session_data)
@@ -234,12 +285,12 @@ def _import_queue_items(source: sqlite3.Connection, session: Session, watermark:
     if batch:
         _flush_queue_items(session, batch, watermark is not None)
 
-    return total
+    return total, max_updated_at
 
 
 def _flush_queue_items(session: Session, rows: list[dict], incremental: bool):
     # session_queue has no natural unique key in our schema. On a fresh import
-    # we just insert; on incremental sync the watermark filter would re-fetch
+    # we just insert; on incremental sync the watermark filter re-fetches
     # the boundary row, so dedupe by (session_id, status) before insert.
     if incremental:
         existing = {
