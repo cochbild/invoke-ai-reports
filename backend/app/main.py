@@ -4,10 +4,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from backend.app.config import get_settings
 from backend.app.database import Base, get_engine
 from backend.routers import sync, users, stats, settings, validate
+
+# Indexes that may be missing on databases created before they were declared on
+# the ORM models. `Base.metadata.create_all` only creates indexes for tables it
+# is creating, not for pre-existing tables, so apply these explicitly.
+_BACKFILL_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS ix_generations_created_at ON generations (created_at)",
+    "CREATE INDEX IF NOT EXISTS ix_queue_items_created_at ON queue_items (created_at)",
+)
 
 
 @asynccontextmanager
@@ -15,6 +24,9 @@ async def lifespan(app: FastAPI):
     s = get_settings()
     engine = get_engine(s.app_db_path)
     Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        for stmt in _BACKFILL_INDEXES:
+            conn.execute(text(stmt))
     yield
 
 

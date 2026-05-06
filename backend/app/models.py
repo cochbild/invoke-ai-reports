@@ -13,7 +13,7 @@ class Generation(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     image_name: Mapped[str] = mapped_column(String, unique=True, index=True)
     user_id: Mapped[Optional[str]] = mapped_column(String, index=True)
-    created_at: Mapped[datetime]
+    created_at: Mapped[datetime] = mapped_column(index=True)
     generation_mode: Mapped[Optional[str]] = mapped_column(String)
     model_name: Mapped[Optional[str]] = mapped_column(String, index=True)
     model_base: Mapped[Optional[str]] = mapped_column(String, index=True)
@@ -53,7 +53,7 @@ class QueueItem(Base):
     model_name: Mapped[Optional[str]] = mapped_column(String)
     model_base: Mapped[Optional[str]] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, index=True)
-    created_at: Mapped[Optional[datetime]]
+    created_at: Mapped[Optional[datetime]] = mapped_column(index=True)
     started_at: Mapped[Optional[datetime]]
     completed_at: Mapped[Optional[datetime]]
     error_type: Mapped[Optional[str]] = mapped_column(String)
