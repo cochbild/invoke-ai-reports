@@ -232,5 +232,10 @@ export const fetchSettings = () =>
 export const updateSettings = (invoke_path: string) =>
   put<{ invoke_path: string }>('/api/settings', { invoke_path })
 
-export const clearData = () =>
-  post<{ status: string }>('/api/settings/clear', {})
+export const requestClearToken = () =>
+  post<{ token: string; ttl_seconds: number }>('/api/settings/clear-token', {})
+
+export const clearData = async () => {
+  const { token } = await requestClearToken()
+  return post<{ status: string }>('/api/settings/clear', { confirmation_token: token })
+}

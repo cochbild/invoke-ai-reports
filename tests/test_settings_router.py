@@ -61,11 +61,26 @@ def test_update_settings_invoke_path(client):
     assert resp2.json()["invoke_path"] == "/new/invoke/path"
 
 
-def test_clear_data_removes_all_records(client):
-    """POST /api/settings/clear should remove all data tables."""
-    resp = client.post("/api/settings/clear")
+def test_clear_data_requires_token(client):
+    """POST /api/settings/clear without a token should be rejected."""
+    resp = client.post("/api/settings/clear", json={"confirmation_token": "bogus"})
+    assert resp.status_code == 403
+
+
+def test_clear_data_with_token_removes_all_records(client):
+    """The full token-then-clear flow should wipe all data tables."""
+    token_resp = client.post("/api/settings/clear-token")
+    assert token_resp.status_code == 200
+    token = token_resp.json()["token"]
+    assert token  # non-empty
+
+    resp = client.post("/api/settings/clear", json={"confirmation_token": token})
     assert resp.status_code == 200
     assert resp.json()["status"] == "cleared"
+
+    # Token is single-use — replay must fail
+    replay = client.post("/api/settings/clear", json={"confirmation_token": token})
+    assert replay.status_code == 403
 
     # Verify no users or sync history remain
     users_resp = client.get("/api/users")
