@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # Allow the Vite dev server (5173) to call the API. Off by default; set
     # INVOKE_REPORTS_DEV_CORS=1 when running `npm run dev` against this backend.
     dev_cors: bool = False
+    # The API has no auth; binding non-loopback exposes destructive endpoints
+    # (POST /sync, /settings/clear, /validate-path) to the local network.
+    # Set INVOKE_REPORTS_ALLOW_REMOTE=1 to acknowledge and override.
+    allow_remote: bool = False
 
 
 @lru_cache(maxsize=1)

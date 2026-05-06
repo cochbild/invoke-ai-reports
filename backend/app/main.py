@@ -84,7 +84,19 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
 def run():
+    import sys
     import uvicorn
     s = get_settings()
+    if s.host not in _LOOPBACK_HOSTS and not s.allow_remote:
+        sys.stderr.write(
+            f"Refusing to bind {s.host!r}: this app has no authentication, so a "
+            "non-loopback bind exposes POST /api/sync, POST /api/settings/clear, "
+            "and POST /api/validate-path to anyone on your network. "
+            "Set INVOKE_REPORTS_ALLOW_REMOTE=1 to override.\n"
+        )
+        sys.exit(2)
     uvicorn.run("backend.app.main:app", host=s.host, port=s.port, reload=False)
