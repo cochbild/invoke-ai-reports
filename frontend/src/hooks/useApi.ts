@@ -25,14 +25,18 @@ export function useApi<T>(
     setLoading(true)
     setError(null)
     try {
-      const merged = { ...filters, ...extraParams } as Filters & Record<string, unknown>
-      const result = await fetcher(merged as any)
+      const merged = { ...filters, ...extraParams } as Filters
+      const result = await fetcher(merged)
       setData(result)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')
     } finally {
       setLoading(false)
     }
+    // paramsKey JSON-encodes filters + extraParams, so it changes whenever
+    // either does. Listing them individually would re-fire on every render
+    // because extraParams is usually a fresh object literal at the call site.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paramsKey])
 
   useEffect(() => { load() }, [load])

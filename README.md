@@ -24,6 +24,7 @@ The importer reads InvokeAI's database in read-only mode, parses JSON metadata, 
 ### Prerequisites
 
 - Python 3.10+
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) (recommended) or pip
 - Node.js 18+ (only needed if building the frontend from source)
 - An InvokeAI installation with a `databases/invokeai.db` file
 
@@ -33,9 +34,8 @@ The importer reads InvokeAI's database in read-only mode, parses JSON metadata, 
 git clone https://github.com/cochbild/invoke-ai-reports.git
 cd invoke-ai-reports
 
-# Set up Python backend
-python -m venv .venv
-pip install -r requirements.txt
+# Set up Python backend (uv handles venv + locked deps)
+uv sync
 
 # Build the frontend
 cd frontend
@@ -44,30 +44,19 @@ npm run build
 cd ..
 ```
 
-### Running on Windows
+> Prefer plain pip? `python -m venv .venv && .venv/bin/pip install -e .` works too — `pyproject.toml` is the source of truth.
 
-From **PowerShell** or **Command Prompt**:
+### Running
 
-```powershell
-.venv\Scripts\activate
-uvicorn backend.app.main:app --port 9876
-```
-
-From **Git Bash** (MINGW):
+All platforms:
 
 ```bash
-source .venv/Scripts/activate
-uvicorn backend.app.main:app --port 9876
+uv run uvicorn backend.app.main:app --port 9876
 ```
 
-Open `http://localhost:9876` in your browser. On first run, enter your InvokeAI installation path (e.g., `G:\InvokeUi` or `C:\Users\you\InvokeAI`).
+Open `http://localhost:9876` in your browser. On first run, enter your InvokeAI installation path (e.g., `G:\InvokeUi`, `C:\Users\you\InvokeAI`, or `/home/user/invokeai`).
 
-### Running on Linux / WSL
-
-```bash
-source .venv/bin/activate
-uvicorn backend.app.main:app --port 9876
-```
+> Without uv, activate your venv first (`source .venv/bin/activate` on Linux/Mac, `.venv\Scripts\activate` on Windows) and drop the `uv run` prefix.
 
 Open `http://localhost:9876`. When prompted for the InvokeAI path:
 
@@ -100,18 +89,17 @@ Environment variables (prefix `INVOKE_REPORTS_`):
 ### Backend
 
 ```bash
-# Activate venv
-source .venv/Scripts/activate  # Windows Git Bash
-# or: source .venv/bin/activate  # Linux/Mac
-
-# Install dev dependencies
-pip install -e ".[dev]"
+# Sync deps including dev tooling (pytest, httpx, pip-audit)
+uv sync --dev
 
 # Run backend tests
-pytest -v
+uv run pytest -v
 
 # Run backend with hot reload
-uvicorn backend.app.main:app --reload --port 9876
+uv run uvicorn backend.app.main:app --reload --port 9876
+
+# Audit dependencies for known CVEs
+uv run pip-audit
 ```
 
 ### Frontend
