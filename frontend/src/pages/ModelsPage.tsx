@@ -1,5 +1,5 @@
 // frontend/src/pages/ModelsPage.tsx
-import { Box, SimpleGrid, Table, Thead, Tbody, Tr, Th, Td } from '@chakra-ui/react'
+import { Box, SimpleGrid, Table } from '@chakra-ui/react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
@@ -18,7 +18,7 @@ export default function ModelsPage() {
 
   return (
     <Box>
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mb={6}>
+      <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4} mb={6}>
         <ChartCard title="Most Used Models" loading={topModels.loading} error={topModels.error}>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={topModels.data || []} layout="vertical" margin={{ left: 100 }}>
@@ -47,48 +47,48 @@ export default function ModelsPage() {
       </SimpleGrid>
 
       <ChartCard title="Least Used Models" loading={leastModels.loading} error={leastModels.error}>
-        <Table variant="simple" size="sm">
-          <Thead>
-            <Tr><Th>Model</Th><Th>Family</Th><Th isNumeric>Count</Th></Tr>
-          </Thead>
-          <Tbody>
+        <Table.Root size="sm">
+          <Table.Header>
+            <Table.Row><Table.ColumnHeader>Model</Table.ColumnHeader><Table.ColumnHeader>Family</Table.ColumnHeader><Table.ColumnHeader textAlign="end">Count</Table.ColumnHeader></Table.Row>
+          </Table.Header>
+          <Table.Body>
             {(leastModels.data || []).map(m => (
-              <Tr key={m.model_name}>
-                <Td>{m.model_name}</Td>
-                <Td>{m.model_base}</Td>
-                <Td isNumeric>{m.count}</Td>
-              </Tr>
+              <Table.Row key={m.model_name}>
+                <Table.Cell>{m.model_name}</Table.Cell>
+                <Table.Cell>{m.model_base}</Table.Cell>
+                <Table.Cell textAlign="end">{m.count}</Table.Cell>
+              </Table.Row>
             ))}
-          </Tbody>
-        </Table>
+          </Table.Body>
+        </Table.Root>
       </ChartCard>
 
       <Box mt={4}>
         <ChartCard title="Model Leaderboard" loading={leaderboard.loading} error={leaderboard.error}>
           <Box overflowX="auto">
-            <Table variant="simple" size="sm">
-              <Thead>
-                <Tr>
-                  <Th>Model</Th><Th>Family</Th><Th isNumeric>Count</Th>
-                  <Th isNumeric>Avg Steps</Th><Th isNumeric>Avg CFG</Th>
-                  <Th>Resolution</Th><Th>First Used</Th><Th>Last Used</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
+            <Table.Root size="sm">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeader>Model</Table.ColumnHeader><Table.ColumnHeader>Family</Table.ColumnHeader><Table.ColumnHeader textAlign="end">Count</Table.ColumnHeader>
+                  <Table.ColumnHeader textAlign="end">Avg Steps</Table.ColumnHeader><Table.ColumnHeader textAlign="end">Avg CFG</Table.ColumnHeader>
+                  <Table.ColumnHeader>Resolution</Table.ColumnHeader><Table.ColumnHeader>First Used</Table.ColumnHeader><Table.ColumnHeader>Last Used</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
                 {(leaderboard.data || []).map(m => (
-                  <Tr key={m.model_name}>
-                    <Td fontWeight="medium">{m.model_name}</Td>
-                    <Td>{m.model_base}</Td>
-                    <Td isNumeric>{m.count}</Td>
-                    <Td isNumeric>{m.avg_steps ?? '—'}</Td>
-                    <Td isNumeric>{m.avg_cfg ?? '—'}</Td>
-                    <Td>{m.common_resolution ?? '—'}</Td>
-                    <Td>{m.first_used?.split(' ')[0] ?? '—'}</Td>
-                    <Td>{m.last_used?.split(' ')[0] ?? '—'}</Td>
-                  </Tr>
+                  <Table.Row key={m.model_name}>
+                    <Table.Cell fontWeight="medium">{m.model_name}</Table.Cell>
+                    <Table.Cell>{m.model_base}</Table.Cell>
+                    <Table.Cell textAlign="end">{m.count}</Table.Cell>
+                    <Table.Cell textAlign="end">{m.avg_steps ?? '—'}</Table.Cell>
+                    <Table.Cell textAlign="end">{m.avg_cfg ?? '—'}</Table.Cell>
+                    <Table.Cell>{m.common_resolution ?? '—'}</Table.Cell>
+                    <Table.Cell>{m.first_used?.split(' ')[0] ?? '—'}</Table.Cell>
+                    <Table.Cell>{m.last_used?.split(' ')[0] ?? '—'}</Table.Cell>
+                  </Table.Row>
                 ))}
-              </Tbody>
-            </Table>
+              </Table.Body>
+            </Table.Root>
           </Box>
         </ChartCard>
       </Box>

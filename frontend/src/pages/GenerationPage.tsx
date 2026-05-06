@@ -1,5 +1,5 @@
 // frontend/src/pages/GenerationPage.tsx
-import { Box, SimpleGrid, Table, Thead, Tbody, Tr, Th, Td } from '@chakra-ui/react'
+import { Box, SimpleGrid, Table } from '@chakra-ui/react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -22,7 +22,7 @@ export default function GenerationPage() {
 
   return (
     <Box>
-      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4} mb={6}>
+      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap={4} mb={6}>
         <StatCard label="Images with LoRA" value={loras.data?.total_with_lora} loading={loras.loading}
           helpText={loras.data ? `${loras.data.pct_with_lora}% of all` : undefined} />
         <StatCard label="Total Queue Items" value={errors.data?.total_items} loading={errors.loading} />
@@ -31,7 +31,7 @@ export default function GenerationPage() {
         <StatCard label="Top Resolution" value={resolutions.data?.[0]?.resolution} loading={resolutions.loading} />
       </SimpleGrid>
 
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mb={6}>
+      <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4} mb={6}>
         <ChartCard title="Resolution Distribution" loading={resolutions.loading} error={resolutions.error}>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={(resolutions.data || []).slice(0, 8)}>
@@ -61,7 +61,7 @@ export default function GenerationPage() {
         </ChartCard>
       </SimpleGrid>
 
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mb={6}>
+      <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4} mb={6}>
         <ChartCard title="Steps Distribution" loading={steps.loading} error={steps.error}>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={steps.data || []}>
@@ -85,30 +85,30 @@ export default function GenerationPage() {
         </ChartCard>
       </SimpleGrid>
 
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4}>
+      <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4}>
         <ChartCard title="Top LoRAs" loading={loras.loading} error={loras.error}>
-          <Table variant="simple" size="sm">
-            <Thead><Tr><Th>LoRA</Th><Th isNumeric>Used</Th></Tr></Thead>
-            <Tbody>
+          <Table.Root size="sm">
+            <Table.Header><Table.Row><Table.ColumnHeader>LoRA</Table.ColumnHeader><Table.ColumnHeader textAlign="end">Used</Table.ColumnHeader></Table.Row></Table.Header>
+            <Table.Body>
               {(loras.data?.top_loras || []).map(l => (
-                <Tr key={l.lora_name}><Td>{l.lora_name}</Td><Td isNumeric>{l.count}</Td></Tr>
+                <Table.Row key={l.lora_name}><Table.Cell>{l.lora_name}</Table.Cell><Table.Cell textAlign="end">{l.count}</Table.Cell></Table.Row>
               ))}
-            </Tbody>
-          </Table>
+            </Table.Body>
+          </Table.Root>
         </ChartCard>
 
         <ChartCard title="Errors by Type" loading={errors.loading} error={errors.error}>
-          <Table variant="simple" size="sm">
-            <Thead><Tr><Th>Error Type</Th><Th isNumeric>Count</Th></Tr></Thead>
-            <Tbody>
+          <Table.Root size="sm">
+            <Table.Header><Table.Row><Table.ColumnHeader>Error Type</Table.ColumnHeader><Table.ColumnHeader textAlign="end">Count</Table.ColumnHeader></Table.Row></Table.Header>
+            <Table.Body>
               {(errors.data?.by_error_type || []).map(e => (
-                <Tr key={e.error_type}><Td>{e.error_type}</Td><Td isNumeric>{e.count}</Td></Tr>
+                <Table.Row key={e.error_type}><Table.Cell>{e.error_type}</Table.Cell><Table.Cell textAlign="end">{e.count}</Table.Cell></Table.Row>
               ))}
               {(errors.data?.by_error_type || []).length === 0 && (
-                <Tr><Td colSpan={2} color="gray.500">No errors</Td></Tr>
+                <Table.Row><Table.Cell colSpan={2} color="gray.500">No errors</Table.Cell></Table.Row>
               )}
-            </Tbody>
-          </Table>
+            </Table.Body>
+          </Table.Root>
         </ChartCard>
       </SimpleGrid>
     </Box>

@@ -1,5 +1,5 @@
 // frontend/src/components/StatCard.tsx
-import { Card, CardBody, Stat, StatLabel, StatNumber, StatHelpText, Skeleton } from '@chakra-ui/react'
+import { Card, Stat, Skeleton } from '@chakra-ui/react'
 
 interface StatCardProps {
   label: string
@@ -10,18 +10,18 @@ interface StatCardProps {
 
 export default function StatCard({ label, value, helpText, loading }: StatCardProps) {
   return (
-    <Card>
-      <CardBody>
-        <Stat>
-          <StatLabel color="gray.400" fontSize="sm">{label}</StatLabel>
-          <Skeleton isLoaded={!loading} mt={1}>
-            <StatNumber fontSize="2xl" color="accent.blue">
+    <Card.Root bg="surface.bg" borderColor="surface.border" borderWidth="1px" borderRadius="lg">
+      <Card.Body>
+        <Stat.Root>
+          <Stat.Label color="gray.400" fontSize="sm">{label}</Stat.Label>
+          <Skeleton loading={!!loading} mt={1}>
+            <Stat.ValueText fontSize="2xl" color="accent.blue">
               {value ?? '—'}
-            </StatNumber>
+            </Stat.ValueText>
           </Skeleton>
-          {helpText && <StatHelpText color="gray.500">{helpText}</StatHelpText>}
-        </Stat>
-      </CardBody>
-    </Card>
+          {helpText && <Stat.HelpText color="gray.500">{helpText}</Stat.HelpText>}
+        </Stat.Root>
+      </Card.Body>
+    </Card.Root>
   )
 }

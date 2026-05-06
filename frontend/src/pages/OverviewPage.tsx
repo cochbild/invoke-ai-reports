@@ -20,14 +20,14 @@ export default function OverviewPage() {
 
   return (
     <Box>
-      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4} mb={6}>
+      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap={4} mb={6}>
         <StatCard label="Total Images" value={overview.data?.total_images?.toLocaleString()} loading={overview.loading} />
         <StatCard label="Models Used" value={overview.data?.models_used} loading={overview.loading} />
         <StatCard label="Favorite Model" value={overview.data?.top_model} loading={overview.loading} />
         <StatCard label="Active Since" value={overview.data?.first_date?.split(' ')[0]} loading={overview.loading} />
       </SimpleGrid>
 
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mb={6}>
+      <SimpleGrid columns={{ base: 1, lg: 2 }} gap={4} mb={6}>
         <ChartCard title="Top 5 Models" loading={topModels.loading} error={topModels.error}>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={topModels.data || []} layout="vertical" margin={{ left: 80 }}>
