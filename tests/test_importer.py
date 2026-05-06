@@ -229,6 +229,20 @@ def test_import_watermark_boundary_does_not_lose_rows(invoke_db, app_db_path):
         assert boundary.model_name == "BoundaryModel"
 
 
+def test_sync_history_is_pruned_to_keep_limit(invoke_db, app_db_path, monkeypatch):
+    """SyncHistory should retain only the most recent N rows after each import."""
+    from backend.services import importer
+    monkeypatch.setattr(importer, "_SYNC_HISTORY_KEEP", 3)
+
+    for _ in range(5):
+        import_data(invoke_db, app_db_path)
+
+    engine = get_engine(app_db_path)
+    with Session(engine) as session:
+        rows = session.query(SyncHistory).order_by(SyncHistory.synced_at.desc()).all()
+        assert len(rows) == 3, f"expected pruning to keep 3 rows, got {len(rows)}"
+
+
 def test_import_queue_dedup_does_not_collide_on_status_change(invoke_db, app_db_path):
     """A queue item that legitimately progresses through statuses must remain a single row."""
     import_data(invoke_db, app_db_path)

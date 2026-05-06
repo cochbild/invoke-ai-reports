@@ -106,12 +106,13 @@ def _set_watermark(session: Session, key: str, value: str):
         session.add(AppSetting(key=key, value=value))
 
 
-def _prune_sync_history(session: Session, keep: int = _SYNC_HISTORY_KEEP):
-    """Keep only the most recent N SyncHistory rows."""
+def _prune_sync_history(session: Session):
+    """Keep only the most recent _SYNC_HISTORY_KEEP rows. Reads the module
+    attribute at call time so tests can monkeypatch it."""
     from sqlalchemy import select
     keep_ids = select(SyncHistory.id).order_by(
         SyncHistory.synced_at.desc()
-    ).limit(keep).scalar_subquery()
+    ).limit(_SYNC_HISTORY_KEEP).scalar_subquery()
     session.query(SyncHistory).filter(SyncHistory.id.notin_(keep_ids)).delete(
         synchronize_session=False
     )

@@ -32,12 +32,13 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="InvokeAI Reports", lifespan=lifespan)
+    s = get_settings()
+    origins = [f"http://{s.host}:{s.port}", f"http://localhost:{s.port}"]
+    if s.dev_cors:
+        origins += ["http://localhost:5173", "http://127.0.0.1:5173"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173", "http://127.0.0.1:5173",  # Vite dev server
-            "http://localhost:9876", "http://127.0.0.1:9876",  # Production
-        ],
+        allow_origins=origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
