@@ -22,7 +22,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync dependencies
-        run: uv sync --dev --frozen
+        run: uv sync --all-extras --frozen
 
       - name: Run pytest
         run: uv run pytest -v
@@ -30,7 +30,7 @@ jobs:
       - name: pip-audit (vulnerability scan)
         run: |
           uv export --format requirements-txt --no-hashes --no-emit-project --no-dev -q -o /tmp/reqs.txt
-          uv run --extra dev pip-audit -r /tmp/reqs.txt
+          uv run pip-audit -r /tmp/reqs.txt
 
   frontend:
     name: Frontend (vitest, npm audit)
