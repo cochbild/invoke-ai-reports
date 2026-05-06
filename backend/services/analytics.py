@@ -136,16 +136,13 @@ def get_cfg_distribution(session, user_id=None, start_date=None, end_date=None):
 def get_lora_stats(session, user_id=None, start_date=None, end_date=None):
     base = _apply_filters(session.query(Generation), user_id, start_date, end_date)
     total = base.count()
-    gen_ids_with_lora = session.query(GenerationLora.generation_id).distinct().subquery()
-    with_lora = base.filter(Generation.id.in_(session.query(gen_ids_with_lora))).count()
-    lora_query = session.query(GenerationLora.lora_name, func.count().label("cnt")
-        ).group_by(GenerationLora.lora_name).order_by(func.count().desc())
-    if user_id or start_date or end_date:
-        filtered_ids = base.with_entities(Generation.id).subquery()
-        lora_query = session.query(GenerationLora.lora_name, func.count().label("cnt")
-            ).filter(GenerationLora.generation_id.in_(session.query(filtered_ids))
-            ).group_by(GenerationLora.lora_name).order_by(func.count().desc())
-    top_loras = [{"lora_name": r[0], "count": r[1]} for r in lora_query.all()]
+    filtered_ids = base.with_entities(Generation.id).subquery()
+    with_lora = (session.query(func.count(func.distinct(GenerationLora.generation_id)))
+        .filter(GenerationLora.generation_id.in_(session.query(filtered_ids))).scalar() or 0)
+    lora_rows = (session.query(GenerationLora.lora_name, func.count().label("cnt"))
+        .filter(GenerationLora.generation_id.in_(session.query(filtered_ids)))
+        .group_by(GenerationLora.lora_name).order_by(func.count().desc()).all())
+    top_loras = [{"lora_name": r[0], "count": r[1]} for r in lora_rows]
     return {"total_with_lora": with_lora,
             "pct_with_lora": round((with_lora / total * 100), 1) if total > 0 else 0,
             "top_loras": top_loras}

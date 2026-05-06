@@ -1,8 +1,10 @@
 import json
 import sqlite3
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
+from sqlalchemy import func
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from backend.app.database import Base, get_engine
@@ -15,6 +17,8 @@ _DT_FORMATS = (
     "%Y-%m-%dT%H:%M:%S",
     "%Y-%m-%d",
 )
+
+_BATCH_SIZE = 1000
 
 
 def _parse_dt(value: Any) -> Optional[datetime]:
@@ -74,7 +78,8 @@ def parse_session_model(session_data: Optional[dict]) -> tuple[Optional[str], Op
 def import_data(invoke_db_path: str, app_db_path: str) -> dict[str, int]:
     """Import data from InvokeAI's database into the app database.
 
-    Uses a single transaction — if anything fails, the previous data is preserved.
+    Incremental: only rows newer than the watermark stored in the app DB are
+    pulled from the source. Upsert by `image_name` makes re-runs safe.
     """
     source_conn = sqlite3.connect(f"file:{invoke_db_path}?mode=ro", uri=True)
     source_conn.row_factory = sqlite3.Row
@@ -87,76 +92,14 @@ def import_data(invoke_db_path: str, app_db_path: str) -> dict[str, int]:
 def _do_import(source_conn: sqlite3.Connection, app_db_path: str, source_path: str) -> dict[str, int]:
     engine = get_engine(app_db_path)
     Base.metadata.create_all(engine)
-    images_imported = 0
-    queue_items_imported = 0
 
     with Session(engine) as session:
-        # Delete and re-import in a single transaction
-        session.query(GenerationLora).delete()
-        session.query(Generation).delete()
-        session.query(QueueItem).delete()
-        session.query(User).delete()
+        gen_watermark = session.query(func.max(Generation.created_at)).scalar()
+        queue_watermark = session.query(func.max(QueueItem.created_at)).scalar()
 
-        cursor = source_conn.execute(
-            "SELECT image_name, user_id, created_at, width, height, metadata, starred, has_workflow FROM images"
-        )
-        for row in cursor:
-            metadata_str = row["metadata"]
-            metadata = json.loads(metadata_str) if metadata_str else None
-            parsed = parse_image_metadata(metadata)
-            width = (metadata.get("width") if metadata else None) or row["width"]
-            height = (metadata.get("height") if metadata else None) or row["height"]
-
-            gen = Generation(
-                image_name=row["image_name"], user_id=row["user_id"],
-                created_at=_parse_dt(row["created_at"]), generation_mode=parsed["generation_mode"],
-                model_name=parsed["model_name"], model_base=parsed["model_base"],
-                model_key=parsed["model_key"],
-                positive_prompt=parsed["positive_prompt"],
-                negative_prompt=parsed["negative_prompt"],
-                width=width, height=height,
-                seed=metadata.get("seed") if metadata else None,
-                steps=parsed["steps"], cfg_scale=parsed["cfg_scale"],
-                scheduler=parsed["scheduler"],
-                starred=bool(row["starred"]) if row["starred"] is not None else None,
-                has_workflow=bool(row["has_workflow"]) if row["has_workflow"] is not None else None,
-            )
-            session.add(gen)
-            session.flush()
-            for lora in parsed["loras"]:
-                session.add(GenerationLora(
-                    generation_id=gen.id, lora_name=lora["name"], lora_weight=lora["weight"],
-                ))
-            images_imported += 1
-
-        cursor = source_conn.execute(
-            """SELECT batch_id, session_id, session, status, created_at,
-                      started_at, completed_at, error_type, error_message, user_id
-               FROM session_queue"""
-        )
-        for row in cursor:
-            session_str = row["session"]
-            session_data = json.loads(session_str) if session_str else None
-            model_name, model_base = parse_session_model(session_data)
-            session.add(QueueItem(
-                user_id=row["user_id"], batch_id=row["batch_id"],
-                session_id=row["session_id"], model_name=model_name,
-                model_base=model_base, status=row["status"],
-                created_at=_parse_dt(row["created_at"]),
-                started_at=_parse_dt(row["started_at"]),
-                completed_at=_parse_dt(row["completed_at"]),
-                error_type=row["error_type"],
-                error_message=row["error_message"],
-            ))
-            queue_items_imported += 1
-
-        user_cursor = source_conn.execute("SELECT user_id, display_name FROM users")
-        for row in user_cursor:
-            user_id = row["user_id"]
-            count = session.query(Generation).filter_by(user_id=user_id).count()
-            session.add(User(
-                user_id=user_id, display_name=row["display_name"], image_count=count,
-            ))
+        images_imported = _import_images(source_conn, session, gen_watermark)
+        queue_items_imported = _import_queue_items(source_conn, session, queue_watermark)
+        _refresh_users(source_conn, session)
 
         session.add(SyncHistory(
             source_path=source_path, synced_at=datetime.now(),
@@ -164,5 +107,174 @@ def _do_import(source_conn: sqlite3.Connection, app_db_path: str, source_path: s
         ))
         session.commit()
 
-    source_conn.close()
     return {"images_imported": images_imported, "queue_items_imported": queue_items_imported}
+
+
+def _import_images(source: sqlite3.Connection, session: Session, watermark: Optional[datetime]) -> int:
+    base_sql = ("SELECT image_name, user_id, created_at, width, height, metadata, "
+                "starred, has_workflow FROM images")
+    if watermark:
+        cursor = source.execute(base_sql + " WHERE created_at >= ?", (str(watermark),))
+    else:
+        cursor = source.execute(base_sql)
+
+    gen_batch: list[dict] = []
+    lora_groups: list[tuple[str, list[dict]]] = []
+    total = 0
+
+    for row in cursor:
+        metadata_str = row["metadata"]
+        metadata = json.loads(metadata_str) if metadata_str else None
+        parsed = parse_image_metadata(metadata)
+        width = (metadata.get("width") if metadata else None) or row["width"]
+        height = (metadata.get("height") if metadata else None) or row["height"]
+
+        gen_batch.append({
+            "image_name": row["image_name"], "user_id": row["user_id"],
+            "created_at": _parse_dt(row["created_at"]),
+            "generation_mode": parsed["generation_mode"],
+            "model_name": parsed["model_name"], "model_base": parsed["model_base"],
+            "model_key": parsed["model_key"],
+            "positive_prompt": parsed["positive_prompt"],
+            "negative_prompt": parsed["negative_prompt"],
+            "width": width, "height": height,
+            "seed": metadata.get("seed") if metadata else None,
+            "steps": parsed["steps"], "cfg_scale": parsed["cfg_scale"],
+            "scheduler": parsed["scheduler"],
+            "starred": bool(row["starred"]) if row["starred"] is not None else None,
+            "has_workflow": bool(row["has_workflow"]) if row["has_workflow"] is not None else None,
+        })
+        if parsed["loras"]:
+            lora_groups.append((row["image_name"], parsed["loras"]))
+        total += 1
+
+        if len(gen_batch) >= _BATCH_SIZE:
+            _flush_images(session, gen_batch, lora_groups)
+            gen_batch, lora_groups = [], []
+
+    if gen_batch:
+        _flush_images(session, gen_batch, lora_groups)
+
+    return total
+
+
+def _flush_images(session: Session, gen_rows: list[dict], lora_groups: list[tuple[str, list[dict]]]):
+    # Upsert generations by image_name. On conflict, refresh every column except
+    # the primary key and the conflict key itself.
+    stmt = sqlite_insert(Generation).values(gen_rows)
+    update_cols = {c.name: c for c in stmt.excluded if c.name not in ("id", "image_name")}
+    stmt = stmt.on_conflict_do_update(index_elements=["image_name"], set_=update_cols)
+    session.execute(stmt)
+
+    if not lora_groups:
+        return
+
+    image_names = [name for name, _ in lora_groups]
+    id_map = dict(
+        session.query(Generation.image_name, Generation.id)
+        .filter(Generation.image_name.in_(image_names)).all()
+    )
+
+    # Re-imports may already have LoRA rows for these generations; replace them.
+    gen_ids = [id_map[name] for name in image_names if name in id_map]
+    if gen_ids:
+        session.query(GenerationLora).filter(
+            GenerationLora.generation_id.in_(gen_ids)
+        ).delete(synchronize_session=False)
+
+    lora_rows = []
+    for image_name, loras in lora_groups:
+        gen_id = id_map.get(image_name)
+        if gen_id is None:
+            continue
+        for lora in loras:
+            if not lora.get("name"):
+                continue
+            lora_rows.append({
+                "generation_id": gen_id,
+                "lora_name": lora["name"],
+                "lora_weight": lora.get("weight") or 0.0,
+            })
+    if lora_rows:
+        session.execute(sqlite_insert(GenerationLora).values(lora_rows))
+
+
+def _import_queue_items(source: sqlite3.Connection, session: Session, watermark: Optional[datetime]) -> int:
+    base_sql = ("""SELECT batch_id, session_id, session, status, created_at,
+                          started_at, completed_at, error_type, error_message, user_id
+                   FROM session_queue""")
+    if watermark:
+        cursor = source.execute(base_sql + " WHERE created_at >= ?", (str(watermark),))
+    else:
+        cursor = source.execute(base_sql)
+
+    batch: list[dict] = []
+    total = 0
+
+    for row in cursor:
+        session_str = row["session"]
+        session_data = json.loads(session_str) if session_str else None
+        model_name, model_base = parse_session_model(session_data)
+        batch.append({
+            "user_id": row["user_id"], "batch_id": row["batch_id"],
+            "session_id": row["session_id"], "model_name": model_name,
+            "model_base": model_base, "status": row["status"],
+            "created_at": _parse_dt(row["created_at"]),
+            "started_at": _parse_dt(row["started_at"]),
+            "completed_at": _parse_dt(row["completed_at"]),
+            "error_type": row["error_type"],
+            "error_message": row["error_message"],
+        })
+        total += 1
+
+        if len(batch) >= _BATCH_SIZE:
+            _flush_queue_items(session, batch, watermark is not None)
+            batch = []
+
+    if batch:
+        _flush_queue_items(session, batch, watermark is not None)
+
+    return total
+
+
+def _flush_queue_items(session: Session, rows: list[dict], incremental: bool):
+    # session_queue has no natural unique key in our schema. On a fresh import
+    # we just insert; on incremental sync the watermark filter would re-fetch
+    # the boundary row, so dedupe by (session_id, status) before insert.
+    if incremental:
+        existing = {
+            (sid, status) for sid, status in session.query(
+                QueueItem.session_id, QueueItem.status
+            ).filter(QueueItem.session_id.in_({r["session_id"] for r in rows if r["session_id"]})).all()
+        }
+        rows = [r for r in rows if (r["session_id"], r["status"]) not in existing]
+        if not rows:
+            return
+    session.execute(sqlite_insert(QueueItem).values(rows))
+
+
+def _refresh_users(source: sqlite3.Connection, session: Session):
+    """Refresh the User table from source + recompute image_count in one query."""
+    counts = dict(
+        session.query(Generation.user_id, func.count(Generation.id))
+        .group_by(Generation.user_id).all()
+    )
+
+    user_rows = []
+    for row in source.execute("SELECT user_id, display_name FROM users"):
+        user_rows.append({
+            "user_id": row["user_id"],
+            "display_name": row["display_name"],
+            "image_count": counts.get(row["user_id"], 0),
+        })
+
+    if not user_rows:
+        return
+
+    stmt = sqlite_insert(User).values(user_rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["user_id"],
+        set_={"display_name": stmt.excluded.display_name,
+              "image_count": stmt.excluded.image_count},
+    )
+    session.execute(stmt)
