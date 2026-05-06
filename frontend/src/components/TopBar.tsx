@@ -5,6 +5,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useFilters } from '../context/FilterContext'
+import type { DateRange } from '../context/FilterContext'
 import { fetchUsers, triggerSync, fetchSettings } from '../api/client'
 import type { UserInfo } from '../api/client'
 import { toaster } from '../toaster'
@@ -17,21 +18,20 @@ const NAV_ITEMS = [
   { label: 'Generation', path: '/generation' },
 ]
 
-const DATE_PRESETS = [
-  { label: '7d', days: 7 },
-  { label: '30d', days: 30 },
-  { label: '90d', days: 90 },
-  { label: 'All', days: 0 },
+const DATE_PRESETS: { label: string; range: DateRange }[] = [
+  { label: '7d', range: '7d' },
+  { label: '30d', range: '30d' },
+  { label: '90d', range: '90d' },
+  { label: 'All', range: 'all' },
 ]
 
 export default function TopBar() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { filters, setUserId, setDateRange } = useFilters()
+  const { filters, range, setUserId, setRange, setCustomDateRange } = useFilters()
   const [users, setUsers] = useState<UserInfo[]>([])
   const [syncing, setSyncing] = useState(false)
   const [invokePath, setInvokePath] = useState<string | null>(null)
-  const [activePreset, setActivePreset] = useState<number>(0) // 0 = All
 
   useEffect(() => {
     fetchUsers().then(setUsers).catch(() => {})
@@ -59,17 +59,6 @@ export default function TopBar() {
     }
   }
 
-  const handlePreset = (days: number) => {
-    setActivePreset(days)
-    if (days === 0) {
-      setDateRange(undefined, undefined)
-    } else {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(end.getDate() - days)
-      setDateRange(start.toISOString().split('T')[0], end.toISOString().split('T')[0])
-    }
-  }
 
   return (
     <Box bg="surface.bg" borderBottom="1px solid" borderColor="surface.border" px={6} py={2}>
@@ -113,9 +102,9 @@ export default function TopBar() {
           <HStack gap={1}>
             {DATE_PRESETS.map(p => (
               <Button key={p.label} size="xs"
-                variant={activePreset === p.days ? 'solid' : 'outline'}
+                variant={range === p.range ? 'solid' : 'outline'}
                 colorPalette="blue"
-                onClick={() => handlePreset(p.days)}
+                onClick={() => setRange(p.range)}
               >
                 {p.label}
               </Button>
@@ -125,13 +114,13 @@ export default function TopBar() {
           <Input
             type="date" size="sm" w="140px"
             value={filters.start_date || ''}
-            onChange={e => setDateRange(e.target.value || undefined, filters.end_date)}
+            onChange={e => setCustomDateRange(e.target.value || undefined, filters.end_date)}
             bg="surface.card" borderColor="surface.border"
           />
           <Input
             type="date" size="sm" w="140px"
             value={filters.end_date || ''}
-            onChange={e => setDateRange(filters.start_date, e.target.value || undefined)}
+            onChange={e => setCustomDateRange(filters.start_date, e.target.value || undefined)}
             bg="surface.card" borderColor="surface.border"
           />
 
