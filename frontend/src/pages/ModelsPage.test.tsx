@@ -40,6 +40,13 @@ const LEADERBOARD = [
     first_used: '2026-01-15 10:30:00', last_used: '2026-04-20 18:00:00',
   },
 ]
+const UNUSED = [
+  {
+    key: 'k-1', name: 'NeverUsedFlux', base: 'flux', type: 'main',
+    format: 'checkpoint', file_size: 23_809_874_063,
+    description: null, source: 'huggingface.co/test',
+  },
+]
 
 describe('ModelsPage — table rendering contract', () => {
   it('renders the Least Used and Leaderboard tables once data resolves', async () => {
@@ -48,6 +55,7 @@ describe('ModelsPage — table rendering contract', () => {
       '/api/stats/models/least': LEAST,
       '/api/stats/models/family-distribution': FAMILIES,
       '/api/stats/models/leaderboard': LEADERBOARD,
+      '/api/stats/models/unused': UNUSED,
     })
 
     renderWithProviders(<ModelsPage />)
@@ -57,6 +65,9 @@ describe('ModelsPage — table rendering contract', () => {
       // Leaderboard row text
       expect(screen.getByText('1024x1024')).toBeInTheDocument()
       expect(screen.getByText('30')).toBeInTheDocument() // avg_steps
+      // Never-used section: name + size appear in both row and summary
+      expect(screen.getByText('NeverUsedFlux')).toBeInTheDocument()
+      expect(screen.getAllByText(/22\.17 GB/).length).toBeGreaterThan(0)
     })
   })
 
@@ -66,6 +77,7 @@ describe('ModelsPage — table rendering contract', () => {
       '/api/stats/models/least': LEAST,
       '/api/stats/models/family-distribution': FAMILIES,
       '/api/stats/models/leaderboard': LEADERBOARD,
+      '/api/stats/models/unused': UNUSED,
     })
 
     renderWithProviders(<ModelsPage />, { initialPath: '/models' })
@@ -94,6 +106,7 @@ describe('ModelsPage — table rendering contract', () => {
       '/api/stats/models/least': LEAST,
       '/api/stats/models/family-distribution': FAMILIES,
       '/api/stats/models/leaderboard': { status: 503, body: { detail: 'unavailable' } },
+      '/api/stats/models/unused': UNUSED,
     })
 
     renderWithProviders(<ModelsPage />)

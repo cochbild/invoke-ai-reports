@@ -8,7 +8,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from backend.app.database import Base, get_engine
-from backend.app.models import Generation, GenerationLora, QueueItem, User, SyncHistory, AppSetting
+from backend.app.models import Generation, GenerationLora, QueueItem, User, SyncHistory, AppSetting, Model
 
 _WATERMARK_IMAGES = "source_images_updated_at"
 _WATERMARK_QUEUE = "source_queue_updated_at"
@@ -132,6 +132,7 @@ def _do_import(source_conn: sqlite3.Connection, app_db_path: str, source_path: s
         images_imported, new_gen_wm = _import_images(source_conn, session, gen_watermark)
         queue_items_imported, new_queue_wm = _import_queue_items(source_conn, session, queue_watermark)
         _refresh_users(source_conn, session)
+        _refresh_models(source_conn, session)
 
         if new_gen_wm:
             _set_watermark(session, _WATERMARK_IMAGES, new_gen_wm)
@@ -303,6 +304,45 @@ def _flush_queue_items(session: Session, rows: list[dict], incremental: bool):
         if not rows:
             return
     session.execute(sqlite_insert(QueueItem).values(rows))
+
+
+def _refresh_models(source: sqlite3.Connection, session: Session):
+    """Snapshot InvokeAI's installed model registry into the app DB.
+
+    Full replace per sync — the registry is a few hundred rows at most, and
+    a snapshot lets us detect installed-but-never-used models with a simple
+    NOT IN against `generations.model_key`. Runs inside the caller's
+    transaction so it commits atomically with images/queue.
+
+    No-op if the source DB has no `models` table (very old InvokeAI installs).
+    """
+    has_table = source.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='models'"
+    ).fetchone()
+    if not has_table:
+        return
+
+    rows = []
+    for r in source.execute(
+        "SELECT id, name, base, type, format, file_size, description, source, "
+        "created_at, updated_at FROM models"
+    ):
+        rows.append({
+            "key": r["id"],
+            "name": r["name"],
+            "base": r["base"],
+            "type": r["type"],
+            "format": r["format"],
+            "file_size": r["file_size"],
+            "description": r["description"],
+            "source": r["source"],
+            "source_created_at": _parse_dt(r["created_at"]),
+            "source_updated_at": _parse_dt(r["updated_at"]),
+        })
+
+    session.query(Model).delete(synchronize_session=False)
+    if rows:
+        session.execute(sqlite_insert(Model).values(rows))
 
 
 def _refresh_users(source: sqlite3.Connection, session: Session):

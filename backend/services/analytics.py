@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import func, case, distinct
 from sqlalchemy.orm import Session
 
-from backend.app.models import Generation, GenerationLora, QueueItem
+from backend.app.models import Generation, GenerationLora, QueueItem, Model
 from backend.services.prompt_analyzer import tokenize_prompt, analyze_tokens
 
 # Defensive ceiling on grouped distributions ordered by count desc. Keeps a
@@ -55,6 +55,59 @@ def get_top_models(session, limit=10, user_id=None, start_date=None, end_date=No
         .group_by(Generation.model_name, Generation.model_base)
         .order_by(func.count().desc()).limit(limit).all())
     return [{"model_name": r[0], "model_base": r[1], "count": r[2]} for r in rows]
+
+
+def get_unused_models(session, model_type: Optional[str] = None, search: Optional[str] = None):
+    """Installed models that have never been used.
+
+    Lifetime-only — no date or user filter. Main models match by
+    `Model.key == Generation.model_key`; LoRAs match by name against
+    `GenerationLora.lora_name` (LoRA usage is recorded as the metadata name,
+    not the registry key). Other types are always reported as unused because
+    we don't track their usage anywhere.
+    """
+    used_main_keys = (
+        session.query(Generation.model_key)
+        .filter(Generation.model_key.isnot(None))
+        .distinct()
+        .scalar_subquery()
+    )
+    # Some older generations don't carry a model_key; fall back to name match
+    # so we don't falsely flag a model whose only usages predate key tracking.
+    used_main_names = (
+        session.query(Generation.model_name)
+        .filter(Generation.model_name.isnot(None))
+        .distinct()
+        .scalar_subquery()
+    )
+    used_lora_names = (
+        session.query(GenerationLora.lora_name).distinct().scalar_subquery()
+    )
+
+    is_main = Model.type == "main"
+    is_lora = Model.type == "lora"
+    unused_predicate = case(
+        (is_main, Model.key.notin_(used_main_keys) & Model.name.notin_(used_main_names)),
+        (is_lora, Model.name.notin_(used_lora_names)),
+        else_=True,
+    )
+
+    q = session.query(Model).filter(unused_predicate)
+    if model_type:
+        q = q.filter(Model.type == model_type)
+    if search:
+        like = f"%{search}%"
+        q = q.filter(Model.name.ilike(like))
+    rows = q.order_by(Model.type, Model.name).all()
+
+    return [
+        {
+            "key": r.key, "name": r.name, "base": r.base, "type": r.type,
+            "format": r.format, "file_size": r.file_size,
+            "description": r.description, "source": r.source,
+        }
+        for r in rows
+    ]
 
 
 def get_least_used_models(session, limit=10, user_id=None, start_date=None, end_date=None):

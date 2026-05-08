@@ -83,3 +83,24 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String, primary_key=True)
     value: Mapped[Optional[str]] = mapped_column(String)
+
+
+class Model(Base):
+    """Snapshot of InvokeAI's installed model registry, refreshed on each sync.
+
+    `key` mirrors InvokeAI's `models.id`. Generations reference it via
+    `Generation.model_key`, so we can list installed models that have never
+    been used by left-anti-joining this table against `generations`.
+    """
+    __tablename__ = "models"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, index=True)
+    base: Mapped[Optional[str]] = mapped_column(String, index=True)
+    type: Mapped[Optional[str]] = mapped_column(String, index=True)
+    format: Mapped[Optional[str]] = mapped_column(String)
+    file_size: Mapped[Optional[int]]
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    source: Mapped[Optional[str]] = mapped_column(Text)
+    source_created_at: Mapped[Optional[datetime]]
+    source_updated_at: Mapped[Optional[datetime]]

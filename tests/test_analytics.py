@@ -1,4 +1,5 @@
 from datetime import datetime, date
+from backend.app.models import Generation, GenerationLora, Model
 from backend.services.analytics import (
     get_overview_stats, get_top_models, get_least_used_models,
     get_family_distribution, get_model_leaderboard,
@@ -7,6 +8,7 @@ from backend.services.analytics import (
     get_lora_stats, get_error_stats, get_volume_trend,
     get_activity_heatmap, get_parameter_trends,
     get_prompt_top_tokens, get_prompt_length_distribution,
+    get_unused_models,
 )
 
 
@@ -90,3 +92,78 @@ def test_prompt_length_distribution(seeded_db):
     result = get_prompt_length_distribution(seeded_db)
     assert len(result) > 0
     assert all("bucket" in r and "count" in r for r in result)
+
+
+def _seed_unused_fixture(db):
+    """Two used + two unused mains, two used + two unused loras, plus an embedding."""
+    db.add(Generation(image_name="u-001", user_id="u", created_at=datetime(2026, 1, 1),
+                      model_name="UsedMain", model_base="sdxl", model_key="key-used-main"))
+    db.add(Generation(image_name="u-002", user_id="u", created_at=datetime(2026, 1, 2),
+                      model_name="UsedMain2", model_base="flux", model_key="key-used-main-2"))
+    db.flush()
+    g1 = db.query(Generation).filter_by(image_name="u-001").first()
+    db.add(GenerationLora(generation_id=g1.id, lora_name="UsedLora", lora_weight=0.5))
+    db.add(GenerationLora(generation_id=g1.id, lora_name="UsedLora2", lora_weight=0.5))
+
+    rows = [
+        Model(key="key-used-main", name="UsedMain", base="sdxl", type="main", file_size=100),
+        Model(key="key-used-main-2", name="UsedMain2", base="flux", type="main", file_size=200),
+        Model(key="key-unused-main", name="UnusedMain", base="sdxl", type="main", file_size=300),
+        Model(key="key-unused-main-2", name="LonelyFluxModel", base="flux", type="main", file_size=400),
+        # LoRAs match by name, not key
+        Model(key="lora-1", name="UsedLora", base="sdxl", type="lora", file_size=10),
+        Model(key="lora-2", name="UsedLora2", base="sdxl", type="lora", file_size=20),
+        Model(key="lora-3", name="UnusedLora", base="sdxl", type="lora", file_size=30),
+        Model(key="lora-4", name="UnusedFluxLora", base="flux", type="lora", file_size=40),
+        # Non-main/lora types are always unused (no usage tracked)
+        Model(key="emb-1", name="SomeEmbedding", base="sdxl", type="embedding", file_size=5),
+    ]
+    for m in rows:
+        db.add(m)
+    db.commit()
+
+
+def test_unused_models_default_returns_all_unused_types(db_session):
+    _seed_unused_fixture(db_session)
+    result = get_unused_models(db_session)
+    names = sorted(r["name"] for r in result)
+    assert names == ["LonelyFluxModel", "SomeEmbedding", "UnusedFluxLora", "UnusedLora", "UnusedMain"]
+
+
+def test_unused_models_filter_by_type_main(db_session):
+    _seed_unused_fixture(db_session)
+    result = get_unused_models(db_session, model_type="main")
+    names = sorted(r["name"] for r in result)
+    assert names == ["LonelyFluxModel", "UnusedMain"]
+
+
+def test_unused_models_filter_by_type_lora(db_session):
+    _seed_unused_fixture(db_session)
+    result = get_unused_models(db_session, model_type="lora")
+    names = sorted(r["name"] for r in result)
+    assert names == ["UnusedFluxLora", "UnusedLora"]
+
+
+def test_unused_models_search_is_case_insensitive_substring(db_session):
+    _seed_unused_fixture(db_session)
+    result = get_unused_models(db_session, search="flux")
+    names = sorted(r["name"] for r in result)
+    assert names == ["LonelyFluxModel", "UnusedFluxLora"]
+
+
+def test_unused_models_payload_shape(db_session):
+    _seed_unused_fixture(db_session)
+    result = get_unused_models(db_session, model_type="main", search="UnusedMain")
+    assert len(result) == 1
+    row = result[0]
+    assert set(row.keys()) == {
+        "key", "name", "base", "type", "format", "file_size", "description", "source",
+    }
+    assert row["name"] == "UnusedMain"
+    assert row["file_size"] == 300
+
+
+def test_unused_models_empty_when_registry_empty(db_session):
+    """No models snapshotted yet (e.g., before first sync)."""
+    result = get_unused_models(db_session)
+    assert result == []

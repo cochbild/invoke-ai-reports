@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from backend.app.database import Base, get_engine
-from backend.app.models import Generation, GenerationLora, QueueItem, User, SyncHistory
+from backend.app.models import Generation, GenerationLora, QueueItem, User, SyncHistory, Model
 from backend.services.importer import import_data, parse_image_metadata, parse_session_model
 
 
@@ -36,6 +36,24 @@ def invoke_db(tmp_path):
         is_admin BOOLEAN NOT NULL DEFAULT 0, is_active BOOLEAN NOT NULL DEFAULT 1,
         created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
         last_login_at DATETIME)""")
+    # Mirror InvokeAI's models table: real schema uses generated columns from
+    # `config` JSON, but for tests we declare them as plain columns so inserts
+    # are straightforward. The importer reads them with the same SELECT either
+    # way.
+    conn.execute("""CREATE TABLE models (
+        id TEXT PRIMARY KEY, name TEXT, base TEXT, type TEXT, format TEXT,
+        file_size INTEGER, description TEXT, source TEXT,
+        config TEXT, created_at DATETIME, updated_at DATETIME)""")
+    conn.execute("INSERT INTO models (id,name,base,type,format,file_size,description,source,config,created_at,updated_at) "
+                 "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                 ("abc-123", "Juggernaut XL v9", "sdxl", "main", "checkpoint",
+                  6938040682, "SDXL realism model", "huggingface://...", "{}",
+                  "2026-01-01 00:00:00", "2026-01-01 00:00:00"))
+    conn.execute("INSERT INTO models (id,name,base,type,format,file_size,description,source,config,created_at,updated_at) "
+                 "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                 ("xyz-999", "UnusedModel", "sdxl", "main", "checkpoint",
+                  1234567890, None, "url://...", "{}",
+                  "2026-01-02 00:00:00", "2026-01-02 00:00:00"))
 
     metadata = json.dumps({
         "generation_mode": "sdxl_txt2img",
@@ -140,6 +158,40 @@ def test_import_data_full(invoke_db, app_db_path):
         syncs = session.query(SyncHistory).all()
         assert len(syncs) == 1
         assert syncs[0].images_imported == 3
+
+
+def test_import_data_snapshots_models(invoke_db, app_db_path):
+    import_data(invoke_db, app_db_path)
+    engine = get_engine(app_db_path)
+    with Session(engine) as session:
+        models = session.query(Model).order_by(Model.key).all()
+        assert len(models) == 2
+        by_key = {m.key: m for m in models}
+        assert by_key["abc-123"].name == "Juggernaut XL v9"
+        assert by_key["abc-123"].type == "main"
+        assert by_key["abc-123"].file_size == 6938040682
+        assert by_key["xyz-999"].name == "UnusedModel"
+
+
+def test_import_handles_source_without_models_table(tmp_path, app_db_path):
+    """Older InvokeAI installs may not have a `models` table — sync should still work."""
+    db_path = str(tmp_path / "old.db")
+    conn = sqlite3.connect(db_path)
+    conn.execute("""CREATE TABLE images (image_name TEXT PRIMARY KEY, created_at DATETIME,
+        updated_at DATETIME, width INTEGER, height INTEGER, metadata TEXT,
+        starred BOOLEAN, has_workflow BOOLEAN, user_id TEXT)""")
+    conn.execute("""CREATE TABLE session_queue (batch_id TEXT, session_id TEXT, session TEXT,
+        status TEXT, created_at DATETIME, updated_at DATETIME, started_at DATETIME,
+        completed_at DATETIME, error_type TEXT, error_message TEXT, user_id TEXT)""")
+    conn.execute("""CREATE TABLE users (user_id TEXT PRIMARY KEY, display_name TEXT)""")
+    conn.commit()
+    conn.close()
+
+    result = import_data(db_path, app_db_path)
+    assert result["images_imported"] == 0
+    engine = get_engine(app_db_path)
+    with Session(engine) as session:
+        assert session.query(Model).count() == 0
 
 
 def test_import_data_idempotent(invoke_db, app_db_path):

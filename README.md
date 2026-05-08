@@ -8,6 +8,7 @@ A web-based analytics dashboard that reads your InvokeAI installation's SQLite d
 - **Prompt Analysis** — Token frequency, word clouds, prompt length distribution
 - **Trend Tracking** — Generation volume over time, parameter evolution, activity heatmaps
 - **Generation Stats** — Resolution distribution, scheduler usage, LoRA statistics, error rates
+- **Unused Models** — Installed models that were never used in any generation (filterable by main/LoRA, with size totals to help reclaim disk space)
 - **Multi-User** — Auto-detects users from InvokeAI, filterable per-user or aggregate
 - **Date Filtering** — Custom date ranges with preset shortcuts (7d, 30d, 90d, all-time)
 
@@ -135,6 +136,7 @@ All stats endpoints accept optional `user_id`, `start_date`, and `end_date` quer
 | GET | `/api/stats/overview` | KPI summary |
 | GET | `/api/stats/models/top` | Top models by usage |
 | GET | `/api/stats/models/least` | Least used models |
+| GET | `/api/stats/models/unused` | Installed models never used (lifetime); `?type=main\|lora` and `?search=…` |
 | GET | `/api/stats/models/family-distribution` | Model family breakdown |
 | GET | `/api/stats/models/leaderboard` | Full model stats table |
 | GET | `/api/stats/prompts/top-tokens` | Most frequent prompt tokens |

@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from backend.app.database import Base, get_engine, get_db
-from backend.app.models import Generation, GenerationLora, QueueItem, User, SyncHistory
+from backend.app.models import Generation, GenerationLora, QueueItem, User, SyncHistory, Model
 from backend.app.main import app
 
 
@@ -53,6 +53,13 @@ def client(tmp_path):
                               created_at=datetime(2026, 2, 5, 9, 0),
                               error_type="OOMError", error_message="Out of memory"))
 
+        # Generations don't carry model_key in this fixture, so every
+        # main model in the registry is "unused" — perfect for routing tests.
+        session.add(Model(key="m-1", name="ModelA", base="sdxl", type="main", file_size=100))
+        session.add(Model(key="m-2", name="UnusedSDXL", base="sdxl", type="main", file_size=200))
+        session.add(Model(key="l-1", name="LoraA", base="sdxl", type="lora", file_size=10))
+        session.add(Model(key="l-2", name="UnusedLora", base="sdxl", type="lora", file_size=20))
+
         session.commit()
 
     def override_get_db():
@@ -90,6 +97,33 @@ def test_least_models(client):
     assert len(data) >= 1
     # least-used models should have count <= top models
     assert data[0]["count"] <= data[-1]["count"]
+
+
+def test_unused_models_no_filter(client):
+    resp = client.get("/api/stats/models/unused")
+    assert resp.status_code == 200
+    data = resp.json()
+    names = {d["name"] for d in data}
+    # ModelA + LoraA are used; UnusedSDXL + UnusedLora are not
+    assert "UnusedSDXL" in names
+    assert "UnusedLora" in names
+    assert "ModelA" not in names
+    assert "LoraA" not in names
+
+
+def test_unused_models_filter_type(client):
+    resp = client.get("/api/stats/models/unused?type=main")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert all(d["type"] == "main" for d in data)
+    assert {d["name"] for d in data} == {"UnusedSDXL"}
+
+
+def test_unused_models_search(client):
+    resp = client.get("/api/stats/models/unused?search=sdxl")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert {d["name"] for d in data} == {"UnusedSDXL"}
 
 
 def test_family_distribution(client):

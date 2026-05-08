@@ -38,6 +38,12 @@ def least_models(limit: int = Query(default=10, ge=1, le=500), user_id: Optional
     return analytics.get_least_used_models(db, limit=limit, user_id=user_id,
         start_date=_parse_date(start_date), end_date=_parse_date(end_date))
 
+@router.get("/stats/models/unused")
+def unused_models(type: Optional[str] = None, search: Optional[str] = None,
+                  db: Session = Depends(get_db)):
+    return analytics.get_unused_models(db, model_type=type, search=search)
+
+
 @router.get("/stats/models/family-distribution")
 def family_dist(user_id: Optional[str] = None, start_date: Optional[str] = None,
                 end_date: Optional[str] = None, db: Session = Depends(get_db)):

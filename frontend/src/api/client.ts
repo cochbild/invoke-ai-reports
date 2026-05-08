@@ -30,6 +30,17 @@ export interface LeaderboardEntry extends ModelStat {
   last_used: string | null
 }
 
+export interface UnusedModel {
+  key: string
+  name: string
+  base: string | null
+  type: string | null
+  format: string | null
+  file_size: number | null
+  description: string | null
+  source: string | null
+}
+
 export interface FamilyDist {
   model_base: string
   count: number
@@ -180,6 +191,9 @@ export const fetchFamilyDistribution = (f: Filters = {}) =>
 
 export const fetchLeaderboard = (f: Filters = {}) =>
   get<LeaderboardEntry[]>('/api/stats/models/leaderboard', f)
+
+export const fetchUnusedModels = (p: { type?: string; search?: string } = {}) =>
+  get<UnusedModel[]>('/api/stats/models/unused', p)
 
 export const fetchTopTokens = (p: Filters & { limit?: number } = {}) =>
   get<TokenStat[]>('/api/stats/prompts/top-tokens', p)
