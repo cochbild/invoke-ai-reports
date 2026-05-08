@@ -4,10 +4,12 @@ import {
 } from '@chakra-ui/react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { validatePath, triggerSync, updateSettings } from '../api/client'
 import type { ValidationResult } from '../api/client'
 import { toaster } from '../toaster'
 import Surface from '../components/Surface'
+import { SYNC_STATUS_QUERY_KEY } from '../App'
 
 export default function SetupPage() {
   const [path, setPath] = useState('')
@@ -16,6 +18,7 @@ export default function SetupPage() {
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const handleValidate = async () => {
     if (!path.trim()) return
@@ -41,6 +44,10 @@ export default function SetupPage() {
     try {
       await updateSettings(path.trim())
       const result = await triggerSync(path.trim())
+      // App's setup gate reads sync-status from the query cache; without
+      // invalidation it still returns the pre-import (null) value and
+      // navigate('/') bounces straight back to /setup.
+      await queryClient.invalidateQueries({ queryKey: SYNC_STATUS_QUERY_KEY })
       toaster.create({
         title: 'Import complete!',
         description: `Imported ${result.images_imported} images and ${result.queue_items_imported} queue items.`,

@@ -1,9 +1,15 @@
 // frontend/src/App.tsx
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { lazy, Suspense } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Box, Spinner } from '@chakra-ui/react'
 import Layout from './components/Layout'
 import { fetchSyncStatus } from './api/client'
+
+// Exported so SetupPage can invalidate this exact key after a successful
+// import — otherwise the gate stays stuck on the no-data branch and
+// navigate('/') bounces back to /setup.
+export const SYNC_STATUS_QUERY_KEY = ['sync-status'] as const
 
 // Each page lives in its own chunk so recharts (~250 kB) is only loaded
 // when a chart-heavy page is opened, not on first paint.
@@ -24,15 +30,14 @@ function PageFallback() {
 }
 
 export default function App() {
-  const [hasData, setHasData] = useState<boolean | null>(null)
+  const { data, isPending } = useQuery({
+    queryKey: SYNC_STATUS_QUERY_KEY,
+    queryFn: fetchSyncStatus,
+  })
 
-  useEffect(() => {
-    fetchSyncStatus()
-      .then(s => setHasData(s.last_sync !== null))
-      .catch(() => setHasData(false))
-  }, [])
+  if (isPending) return null // loading
 
-  if (hasData === null) return null // loading
+  const hasData = data?.last_sync != null
 
   if (!hasData) {
     return (
